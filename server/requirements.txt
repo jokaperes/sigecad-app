@@ -1,0 +1,2 @@
+cryptography>=49.0.0,<50
+certifi>=2026.6.17

@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Notificador UFGD",
+    "slug": "sigecad-notificador",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "sigecad",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "br.edu.ufgd.notificador",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "UIBackgroundModes": ["remote-notification", "fetch"]
+      }
+    },
+    "android": {
+      "package": "br.edu.ufgd.notificador",
+      "googleServicesFile": "./google-services.json",
+      "permissions": ["POST_NOTIFICATIONS"]
+    },
+    "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/app-check",
+      "@react-native-firebase/messaging",
+      "expo-secure-store",
+      [
+        "expo-build-properties",
+        {
+          "ios": { "useFrameworks": "static" }
+        }
+      ]
+    ]
+  }
+}

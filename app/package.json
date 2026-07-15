@@ -1,0 +1,36 @@
+{
+  "name": "sigecad-app",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "test": "node --import tsx tests/diff.test.ts && node --import tsx tests/cycle.test.ts",
+    "test:parity": "node --import tsx tests/parity.ts",
+    "typecheck": "tsc --noEmit",
+    "doctor": "expo-doctor"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@preeternal/react-native-cookie-manager": "^6.3.3",
+    "@react-native-firebase/app": "^25.1.0",
+    "@react-native-firebase/app-check": "^25.1.0",
+    "@react-native-firebase/auth": "^25.1.0",
+    "@react-native-firebase/functions": "^25.1.0",
+    "@react-native-firebase/messaging": "^25.1.0",
+    "expo": "^57.0.4",
+    "expo-build-properties": "~57.0.3",
+    "expo-secure-store": "~57.0.0",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-webview": "13.16.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.4",
+    "expo-doctor": "^1.20.0",
+    "tsx": "^4.19.0",
+    "typescript": "~6.0.3"
+  }
+}

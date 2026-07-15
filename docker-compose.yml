@@ -1,0 +1,33 @@
+# Dois modos. Escolha um (ou rode os dois).
+#   Self-host pessoal:  docker compose up -d personal
+#   Central (VPS):      docker compose up -d central
+services:
+
+  # SELF-HOST PESSOAL — você, pra você. Token no .env, sem banco.
+  personal:
+    build: .
+    env_file: .env            # SIGECAD_TOKEN, RESEND_API_KEY, RESEND_FROM, NOTIFY_EMAIL
+    volumes:
+      - ./data:/app/data      # persiste state.json entre reinícios
+    environment:
+      - STATE_DIR=/app/data
+    command: ["python", "personal.py", "--loop", "3600"]
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+
+  # CENTRAL — multi-usuário. Tokens cifrados (precisa MASTER_KEY no .env).
+  central:
+    build: .
+    env_file: .env            # MASTER_KEY, RESEND_API_KEY, RESEND_FROM
+    volumes:
+      - ./server-data:/app/server/data   # persiste data.db
+    environment:
+      - SIGECAD_DB_PATH=/app/server/data/data.db
+    command: ["python", "server/poller.py", "--loop", "3600"]
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    profiles: ["central"]     # só sobe com: docker compose --profile central up -d
