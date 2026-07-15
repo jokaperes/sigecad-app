@@ -14,6 +14,9 @@ __pycache__/
 *.jpg
 *.jpeg
 *.png
+# Exceção: assets públicos oficiais usados pela interface do app.
+!app/assets/ufgdnet-icon.png
+!app/assets/app-icon.png
 .env
 *.token
 IDLE-TEST.log

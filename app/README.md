@@ -1,6 +1,6 @@
 # App mobile — SIGECAD Alerta
 
-Aplicativo Expo com dois modos: visualização real de notas no Expo Go e alertas
+Aplicativo Expo com dois modos: notas, perfil e cartão no Expo Go e alertas
 device-sentinel em um build nativo. Token e valor da nota nunca são enviados ao
 backend.
 
@@ -22,8 +22,9 @@ npm run start:go -- --tunnel
 ```
 
 O login aparece na página oficial da UFGD. A senha e o cookie permanecem na
-WebView privada; o app recebe somente respostas das três rotas acadêmicas que usa.
-Notas/faltas ficam em memória e somente hashes/rótulos são persistidos.
+WebView privada. As rotas acadêmicas usam uma allowlist fixa; no portal Cartão,
+ID e hash são derivados somente da página da própria sessão. Notas, foto, saldos
+e extratos ficam em memória e somente hashes/rótulos acadêmicos são persistidos.
 
 ## Estrutura
 
@@ -33,6 +34,7 @@ src/runtime/capabilities.ts   detecta StoreClient sem carregar módulos nativos
 src/expo-go/ExpoGoApp.tsx     dashboard, notas, busca e privacidade
 src/expo-go/PortalSession.tsx WebView incognito e ciclo de sessão
 src/expo-go/bridge.ts         protocolo/allowlist same-origin
+src/expo-go/card.ts           valida perfil, saldos, foto e movimentações
 src/expo-go/validation.ts     limites e schemas das respostas
 src/expo-go/client.ts         PollClient sobre a ponte
 src/native/NativeApp.tsx      consentimento, Firebase, push e exclusão
@@ -44,13 +46,14 @@ src/push/                     cadastro, refresh e silent-push handler
 src/sentinel/cycle.ts         poll/report/baseline
 src/storage/                  AsyncStorage hash-only e registro
 src/ui/                       tema e componentes compartilhados
-tests/                        11 core + 5 ciclo + 8 Expo Go
+assets/                       ícone público UFGDNet e app icon
+tests/                        11 core + 5 ciclo + 11 Expo Go
 ```
 
 ## Limites do Expo Go
 
-- Funciona: CAS/WebView, consulta foreground, dashboard, busca, diff local e
-  limpeza de sessão/histórico.
+- Funciona: CAS/WebView, notas, perfil/foto, saldos, extratos recentes, busca,
+  diff local e limpeza de sessão/histórico.
 - Não funciona: Firebase nativo, App Check, FCM, silent push e checagem em
   segundo plano. Esses recursos exigem development build.
 - O runtime não extrai cookie como fallback; se a sessão expirar, reabre o login.
@@ -76,7 +79,7 @@ npx expo run:ios
 
 Baseline em 15/07/2026:
 
-- 24/24 testes;
+- 27/27 testes;
 - TypeScript strict limpo;
 - Expo Doctor 18/18;
 - nenhuma vulnerabilidade npm alta/crítica;

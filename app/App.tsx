@@ -1,4 +1,5 @@
 import React, { type ComponentType } from "react";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ExpoGoApp } from "./src/expo-go/ExpoGoApp";
 import { isExpoGo } from "./src/runtime/capabilities";
 
@@ -9,7 +10,9 @@ const NativeApp: ComponentType | null = isExpoGo
   : (require("./src/native/NativeApp") as { default: ComponentType }).default;
 
 export default function App() {
-  if (isExpoGo) return <ExpoGoApp />;
-  if (NativeApp) return <NativeApp />;
-  return null;
+  return (
+    <SafeAreaProvider>
+      {isExpoGo ? <ExpoGoApp /> : NativeApp ? <NativeApp /> : null}
+    </SafeAreaProvider>
+  );
 }

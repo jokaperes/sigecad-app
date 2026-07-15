@@ -1,8 +1,8 @@
 import React from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,6 +10,7 @@ import {
   type PressableProps,
   type ViewProps,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius, spacing } from "./theme";
 
 export function Screen({ children, centered = false }: ViewProps & { centered?: boolean }) {
@@ -28,11 +29,12 @@ export function Screen({ children, centered = false }: ViewProps & { centered?: 
 export function Brand() {
   return (
     <View style={styles.brand} accessibilityRole="header">
-      <View style={styles.logo}><Text style={styles.logoText}>S</Text></View>
-      <View>
-        <Text style={styles.brandTitle}>SIGECAD Alerta</Text>
-        <Text style={styles.brandSubtitle}>Notas UFGD, sem entregar sua senha</Text>
-      </View>
+      <Image
+        source={require("../../assets/ufgdnet-icon.png")}
+        style={styles.logo}
+        accessibilityLabel="Ícone UFGDNet"
+      />
+      <Text style={styles.brandTitle}>SIGECAD</Text>
     </View>
   );
 }
@@ -101,17 +103,8 @@ const styles = StyleSheet.create({
   screen: { flexGrow: 1, padding: spacing.lg, gap: spacing.lg },
   centered: { justifyContent: "center" },
   brand: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  logo: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primary,
-  },
-  logoText: { color: colors.white, fontSize: 24, fontWeight: "800" },
-  brandTitle: { color: colors.ink, fontSize: 18, fontWeight: "800" },
-  brandSubtitle: { color: colors.muted, fontSize: 12, marginTop: 2 },
+  logo: { width: 42, height: 42, borderRadius: 9 },
+  brandTitle: { color: colors.ink, fontSize: 21, fontWeight: "900", letterSpacing: 0.4 },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,

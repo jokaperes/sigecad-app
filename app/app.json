@@ -1,9 +1,10 @@
 {
   "expo": {
-    "name": "Notificador UFGD",
+    "name": "SIGECAD",
     "slug": "sigecad-notificador",
     "version": "0.1.0",
     "orientation": "portrait",
+    "icon": "./assets/app-icon.png",
     "scheme": "sigecad",
     "userInterfaceStyle": "automatic",
     "ios": {

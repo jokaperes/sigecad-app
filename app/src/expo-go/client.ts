@@ -1,9 +1,10 @@
 import type { Periodo, PollClient } from "../core/client";
 import type { Notas, Turma } from "../core/types";
+import type { BridgeKind } from "./bridge";
 import { parseNotas, parsePeriodos, parseTurmas } from "./validation";
 
 export type PortalRequest = (
-  kind: "periodos" | "turmas" | "notas",
+  kind: BridgeKind,
   numericId?: number,
 ) => Promise<unknown>;
 

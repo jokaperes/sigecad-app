@@ -44,6 +44,8 @@ GET /cartoes_usuario/visualiza_pessoa
 GET /cartoes_usuario/visualiza_estatus/<codigo>/<hash descobertos na própria página>
 GET /cartoes_usuario/listagem_extrato_ru/<codigo>/<hash>
 GET /cartoes_usuario/listagem_extrato_cantina/<codigo>/<hash>
+GET /cartoes_usuario/listagem_extrato_ajax_ru?estatusId=<descoberto>&pagina=1
+GET /cartoes_usuario/listagem_extrato_ajax_cantina?estatusId=<descoberto>&pagina=1
 GET /foto/<hash descoberto na própria página>
 ```
 

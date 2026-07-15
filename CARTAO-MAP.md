@@ -4,8 +4,8 @@ Atualizado em 15/07/2026.
 
 Host observado: `cartao.app.ufgd.edu.br`. Usa a mesma sessão UFGD. O suporte no
 projeto é estritamente para consultar o cartão pertencente à conta autenticada.
-O dashboard Expo Go não chama essas rotas nem exibe foto, cartão ou saldo; o
-recurso permanece exclusivo do CLI local `sigecad.py --show-card`.
+O dashboard Expo Go agora usa essas rotas na mesma WebView privada para exibir
+foto, cartão mascarado, saldos e movimentações recentes somente em memória.
 
 ## Fluxo implementado
 
@@ -31,6 +31,8 @@ python3 sigecad.py --show-card --photo-out /tmp/minha-foto.jpg
 | `/cartoes_usuario/visualiza_estatus/<codigo>/<hash>` | estado e vias do cartão |
 | `/cartoes_usuario/listagem_extrato_ru/<codigo>/<hash>` | extrato e saldo RU |
 | `/cartoes_usuario/listagem_extrato_cantina/<codigo>/<hash>` | extrato e saldo Cantina |
+| `/cartoes_usuario/listagem_extrato_ajax_ru` | primeira página JSON das movimentações RU |
+| `/cartoes_usuario/listagem_extrato_ajax_cantina` | primeira página JSON das movimentações Cantina |
 | `/foto/<hash>` | foto original |
 | `/foto/<hash>/<largura>/<altura>` | foto redimensionada |
 
@@ -39,6 +41,8 @@ python3 sigecad.py --show-card --photo-out /tmp/minha-foto.jpg
 - Código/hash nunca vêm do usuário: são descobertos na página da própria sessão.
 - Não testar combinações, recursos ou fotos de terceiros.
 - Número completo, saldo e foto não entram no snapshot, banco ou logs.
+- No Expo Go, a UI recebe somente os quatro últimos dígitos; foto, saldos e
+  extratos não entram no AsyncStorage.
 - A foto deve ser salva fora do repositório; imagens estão ignoradas pelo Git.
 - `raw/` contém capturas privadas usadas no desenvolvimento e não é documentação.
 - Valores pessoais antigos foram removidos deste arquivo; saldos mudam e só uma

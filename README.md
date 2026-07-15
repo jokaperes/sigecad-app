@@ -12,7 +12,7 @@ valor das notas nos snapshots.
 
 | Modo | Onde o token fica | Notificação | Estado |
 |---|---|---|---|
-| Expo Go no iPhone | WebView privada; cookie nunca é extraído | Atualização ao abrir/puxar | Pronto para teste físico com SDK 54 |
+| Expo Go no iPhone | WebView privada; cookie nunca é extraído | Atualização ao abrir/puxar | Notas, foto, saldos e extratos no SDK 54 |
 | Mobile device-sentinel | Keychain/Keystore do aluno | Push Firebase | Implementado; exige Firebase e device build |
 | Self-host pessoal | `.env` da própria máquina | Resend ou console | Pronto para uso |
 | Servidor central | SQLite, cifrado com AES-256-GCM | Resend ou console | Pronto, com risco operacional documentado |
@@ -52,7 +52,9 @@ Detalhes em [SELF-HOSTING.md](SELF-HOSTING.md).
 O app usa Expo SDK 54, React Native 0.81 e React 19 e possui dois runtimes. No
 Expo Go, o login e o cookie permanecem em uma WebView privada; uma ponte de mesma
 origem permite somente as três consultas acadêmicas de leitura e exibe as notas
-enquanto o app está aberto. No development build, Firebase App Check, Functions
+enquanto o app está aberto. A mesma WebView pode navegar ao portal Cartão para
+mostrar foto, saldos RU/Cantina e movimentações recentes sem expor o cookie. No
+development build, Firebase App Check, Functions
 e FCM ativam o fluxo device-sentinel em segundo plano.
 
 ```bash
@@ -93,7 +95,8 @@ tests/                     testes Python
 app/
   App.tsx                  seleciona Expo Go ou runtime nativo sem importar módulos incompatíveis
   app.config.js            inclui Google Services apenas quando os arquivos locais existem
-  src/expo-go/             sessão WebView, ponte validada e dashboard iPhone
+  src/expo-go/             sessão WebView, pontes validadas, cartão e dashboard iPhone
+  assets/                  ícone público UFGDNet usado na interface/Expo
   src/native/              login, consentimento, push e painel do development build
   src/runtime/             detecção de capacidades do runtime
   src/auth/                token seguro usado somente pelo runtime nativo

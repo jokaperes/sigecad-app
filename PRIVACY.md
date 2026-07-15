@@ -9,8 +9,8 @@ preencher contato, finalidade e retenção antes de aceitar usuários reais.
 
 - Senha e cookie: permanecem na WebView privada da UFGD; o código React Native
   não lê `document.cookie` nem persiste a sessão.
-- Valores de nota, faltas e resultado: somente em memória enquanto o painel está
-  aberto.
+- Valores de nota, faltas e resultado, foto, final do cartão, saldos e extratos:
+  somente em memória enquanto o painel está aberto.
 - Estado local: hashes unidirecionais truncados, flag de publicação, rótulos e
   timestamp para detectar mudanças.
 - Backend/terceiros: nenhum dado é enviado pelo app nesse modo; as requisições

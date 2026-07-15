@@ -8,11 +8,11 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
-  SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   WebView,
   type WebViewMessageEvent,
@@ -22,6 +22,7 @@ import { Brand, Notice, SecondaryButton } from "../ui/components";
 import { colors, radius, spacing } from "../ui/theme";
 import {
   BRIDGE_BOOTSTRAP,
+  CARD_BRIDGE_BOOTSTRAP,
   PortalBridgeError,
   buildBridgeCommand,
   parseBridgeResponse,
@@ -29,6 +30,8 @@ import {
 } from "./bridge";
 
 const SIGECAD_ORIGIN = "https://sigecad-academico.app.ufgd.edu.br";
+const CARD_ORIGIN = "https://cartao.app.ufgd.edu.br";
+const CARD_URL = `${CARD_ORIGIN}/cartoes_usuario/visualiza_pessoa`;
 const CAS_URL =
   "https://login.app.ufgd.edu.br/?service=" +
   encodeURIComponent(`${SIGECAD_ORIGIN}/`);
@@ -48,6 +51,13 @@ interface PendingRequest {
   timeout: ReturnType<typeof setTimeout>;
 }
 
+interface NavigationWait {
+  origin: string;
+  resolve(): void;
+  reject(error: Error): void;
+  timeout: ReturnType<typeof setTimeout>;
+}
+
 const PortalSessionContext = createContext<PortalSessionValue | null>(null);
 
 export function usePortalSession(): PortalSessionValue {
@@ -59,6 +69,9 @@ export function usePortalSession(): PortalSessionValue {
 export function PortalSession({ children }: { children: React.ReactNode }) {
   const webView = useRef<WebView>(null);
   const pending = useRef(new Map<string, PendingRequest>());
+  const currentOrigin = useRef<string | null>(null);
+  const navigationWait = useRef<NavigationWait | null>(null);
+  const operationQueue = useRef<Promise<void>>(Promise.resolve());
   const requestCounter = useRef(0);
   const connecting = useRef(false);
   const [phase, setPhase] = useState<SessionPhase>("login");
@@ -75,6 +88,13 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
 
   const resetSession = useCallback(() => {
     rejectAll(new PortalBridgeError("A sessão foi reiniciada.", "auth"));
+    if (navigationWait.current) {
+      clearTimeout(navigationWait.current.timeout);
+      navigationWait.current.reject(new PortalBridgeError("A sessão foi reiniciada.", "auth"));
+      navigationWait.current = null;
+    }
+    currentOrigin.current = null;
+    operationQueue.current = Promise.resolve();
     connecting.current = false;
     requestCounter.current = 0;
     setError(null);
@@ -82,12 +102,33 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     setWebKey((value) => value + 1);
   }, [rejectAll]);
 
-  const request = useCallback((kind: BridgeKind, numericId?: number) => {
-    if (!webView.current) {
-      return Promise.reject(new PortalBridgeError("Portal ainda não carregou.", "protocol"));
+  const ensureOrigin = useCallback((origin: string) => {
+    if (currentOrigin.current === origin) return Promise.resolve();
+    if (!webView.current || navigationWait.current) {
+      return Promise.reject(new PortalBridgeError("Navegador do portal indisponível.", "protocol"));
     }
+    return new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        navigationWait.current = null;
+        reject(new PortalBridgeError("O portal demorou demais para abrir.", "timeout"));
+      }, REQUEST_TIMEOUT_MS);
+      navigationWait.current = { origin, resolve, reject, timeout };
+      const destination = origin === CARD_ORIGIN ? CARD_URL : `${SIGECAD_ORIGIN}/`;
+      webView.current?.injectJavaScript(
+        `window.location.assign(${JSON.stringify(destination)}); true;`,
+      );
+    });
+  }, []);
+
+  const performRequest = useCallback(async (kind: BridgeKind, numericId?: number) => {
+    if (!webView.current) {
+      throw new PortalBridgeError("Portal ainda não carregou.", "protocol");
+    }
+    const origin = kind === "card" ? CARD_ORIGIN : SIGECAD_ORIGIN;
+    await ensureOrigin(origin);
     const id = `req-${++requestCounter.current}`;
-    const command = `${BRIDGE_BOOTSTRAP}\n${buildBridgeCommand(id, kind, numericId)}`;
+    const bootstrap = kind === "card" ? CARD_BRIDGE_BOOTSTRAP : BRIDGE_BOOTSTRAP;
+    const command = `${bootstrap}\n${buildBridgeCommand(id, kind, numericId)}`;
     return new Promise<unknown>((resolve, reject) => {
       const timeout = setTimeout(() => {
         pending.current.delete(id);
@@ -96,7 +137,13 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       pending.current.set(id, { resolve, reject, timeout });
       webView.current?.injectJavaScript(command);
     });
-  }, []);
+  }, [ensureOrigin]);
+
+  const request = useCallback((kind: BridgeKind, numericId?: number) => {
+    const result = operationQueue.current.then(() => performRequest(kind, numericId));
+    operationQueue.current = result.then(() => undefined, () => undefined);
+    return result;
+  }, [performRequest]);
 
   const connect = useCallback(async () => {
     if (connecting.current) return;
@@ -124,11 +171,24 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   }
 
   function onLoadEnd(url: string) {
-    if (isAcademicUrl(url)) void connect();
+    const origin = safeOrigin(url);
+    currentOrigin.current = origin;
+    const waiting = navigationWait.current;
+    if (waiting && origin === waiting.origin) {
+      clearTimeout(waiting.timeout);
+      navigationWait.current = null;
+      waiting.resolve();
+    } else if (waiting && isLoginUrl(url)) {
+      clearTimeout(waiting.timeout);
+      navigationWait.current = null;
+      waiting.reject(new PortalBridgeError("Sua sessão UFGD terminou.", "auth"));
+      resetSession();
+    }
+    if (isAcademicUrl(url) && (phase === "login" || phase === "connecting")) void connect();
   }
 
   function onMessage(event: WebViewMessageEvent) {
-    if (!isAcademicUrl(event.nativeEvent.url)) return;
+    if (!isBridgeUrl(event.nativeEvent.url)) return;
     let response;
     try {
       response = parseBridgeResponse(event.nativeEvent.data);
@@ -145,6 +205,7 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     }
     const error = bridgeError(response.error, response.status);
     item.reject(error);
+    if (error.code === "auth") resetSession();
   }
 
   const value = useMemo<PortalSessionValue>(
@@ -191,6 +252,11 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
           onLoadEnd={(event) => onLoadEnd(event.nativeEvent.url)}
           onMessage={onMessage}
           onError={() => {
+            if (navigationWait.current) {
+              clearTimeout(navigationWait.current.timeout);
+              navigationWait.current.reject(new PortalBridgeError("Falha ao abrir o portal.", "network"));
+              navigationWait.current = null;
+            }
             setError("Não foi possível abrir a UFGD. Verifique sua internet.");
             setPhase("error");
           }}
@@ -229,6 +295,24 @@ function isAcademicUrl(value: string): boolean {
     return url.protocol === "https:" && url.origin === SIGECAD_ORIGIN;
   } catch {
     return false;
+  }
+}
+
+function isBridgeUrl(value: string): boolean {
+  const origin = safeOrigin(value);
+  return origin === SIGECAD_ORIGIN || origin === CARD_ORIGIN;
+}
+
+function isLoginUrl(value: string): boolean {
+  return safeOrigin(value) === "https://login.app.ufgd.edu.br";
+}
+
+function safeOrigin(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" ? url.origin : null;
+  } catch {
+    return null;
   }
 }
 

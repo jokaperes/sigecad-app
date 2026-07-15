@@ -8,7 +8,8 @@ canônica para regras de segurança, arquitetura, estrutura e comandos de valida
 - Produto: notificador independente e somente leitura para a própria conta UFGD.
 - Core: `sigecad.py`; nunca persiste valores de nota no snapshot.
 - App: Expo SDK 54/React Native 0.81/React 19, com runtime Expo Go e runtime nativo.
-- Expo Go: cookie fica na WebView privada, notas só em memória e snapshot hash-only.
+- Expo Go: cookie fica na WebView privada; notas, foto, saldos e extratos ficam
+  só em memória e o snapshot acadêmico é hash-only.
 - Nativo: token em SecureStore, Firebase device-sentinel, App Check, quórum e FCM.
 - Backend principal: Firebase device-sentinel, App Check, quórum e FCM.
 - Alternativas: `personal.py` (recomendado para self-host) e `server/` central cifrado.

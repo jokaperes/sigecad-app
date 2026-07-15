@@ -1,11 +1,13 @@
 import { loadAcademicOverview } from "../src/core/academic";
 import {
   BRIDGE_CHANNEL,
+  CARD_BRIDGE_BOOTSTRAP,
   MAX_BRIDGE_MESSAGE_BYTES,
   PortalBridgeError,
   buildBridgeCommand,
   parseBridgeResponse,
 } from "../src/expo-go/bridge";
+import { parseStudentCard } from "../src/expo-go/card";
 import { ExpoGoPollClient } from "../src/expo-go/client";
 import { DataValidationError, parseNotas, parsePeriodos, parseTurmas } from "../src/expo-go/validation";
 
@@ -68,6 +70,16 @@ await check("comando de bridge não aceita ID nem parâmetro injetável", () => 
   assert(command.includes('"numericId":12'));
   rejects(() => buildBridgeCommand("req-1);alert(1)//", "periodos"), Error);
   rejects(() => buildBridgeCommand("req-1", "notas", -1), Error);
+  assert(buildBridgeCommand("req-8", "card").includes('"kind":"card"'));
+});
+
+await check("ponte de cartão deriva recursos da página e nunca lê cookie", () => {
+  assert(CARD_BRIDGE_BOOTSTRAP.includes("visualiza_pessoa"));
+  assert(CARD_BRIDGE_BOOTSTRAP.includes("listagem_extrato_ajax_ru"));
+  assert(CARD_BRIDGE_BOOTSTRAP.includes("listagem_extrato_ajax_cantina"));
+  assert(!CARD_BRIDGE_BOOTSTRAP.includes("document.cookie"));
+  assert(!CARD_BRIDGE_BOOTSTRAP.includes("request.statusId"));
+  assert(!CARD_BRIDGE_BOOTSTRAP.includes("request.resourceHash"));
 });
 
 await check("validadores normalizam respostas reais", () => {
@@ -95,7 +107,7 @@ await check("validadores recusam payloads abusivos", () => {
   rejects(() => parseNotas({ notas: [{ nome: "P1", valor: "x".repeat(101), publicar: true }] }), DataValidationError);
 });
 
-await check("cliente Expo Go usa apenas as três operações permitidas", async () => {
+await check("cliente acadêmico usa apenas as três operações REST permitidas", async () => {
   const calls: string[] = [];
   const client = new ExpoGoPollClient(async (kind, id) => {
     calls.push(`${kind}:${id ?? ""}`);
@@ -107,6 +119,39 @@ await check("cliente Expo Go usa apenas as três operações permitidas", async 
   await client.turmas(1);
   await client.notas(2);
   assert(calls.join(",") === "periodos:,turmas:1,notas:2", calls.join(","));
+});
+
+await check("cartão aceita somente dados sanitizados e número mascarado", () => {
+  const card = parseStudentCard({
+    name: "ALUNO TESTE",
+    course: "COMPUTAÇÃO",
+    active: "Sim",
+    cardLast4: "0466",
+    version: "Via 1",
+    ruBalance: "R$ 5,80",
+    canteenBalance: "R$ 4,00",
+    photoDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+    ruTransactions: [{ date: "15/07/2026", time: "12:30", type: "Débito", value: "R$ 1,00", merchant: "RU" }],
+    canteenTransactions: [],
+  });
+  assert(card.cardLast4 === "0466" && card.ruTransactions[0].merchant === "RU");
+  rejects(() => parseStudentCard({
+    cardLast4: "2022000466",
+    ruTransactions: [],
+    canteenTransactions: [],
+  }), DataValidationError);
+});
+
+await check("cartão limita extrato e rejeita imagem externa", () => {
+  rejects(() => parseStudentCard({
+    photoDataUrl: "https://attacker.invalid/photo.jpg",
+    ruTransactions: [],
+    canteenTransactions: [],
+  }), DataValidationError);
+  rejects(() => parseStudentCard({
+    ruTransactions: new Array(41).fill({ date: "15/07/2026" }),
+    canteenTransactions: [],
+  }), DataValidationError);
 });
 
 await check("visão mostra nota em memória mas snapshot persiste só hash", async () => {

@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
-import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, type WebViewNavigation } from "react-native-webview";
 import CookieManager from "@preeternal/react-native-cookie-manager";
 import { saveToken } from "../auth/token";

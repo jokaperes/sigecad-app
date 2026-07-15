@@ -9,7 +9,7 @@ visualização funcione no Expo Go sem enfraquecer o modo nativo de alertas.
 |---|---|---|
 | Runtime | Expo SDK 54, React Native 0.81, React 19 | Compatível com o Expo Go físico atual |
 | Login | `react-native-webview` | credenciais ficam na página oficial UFGD |
-| Expo Go | WebView same-origin + AsyncStorage | notas foreground; cookie não sai da WebView |
+| Expo Go | WebView same-origin + AsyncStorage | notas, perfil e cartão foreground; cookie não sai da WebView |
 | Native build | cookie manager + SecureStore | token local para ciclos em background |
 | Push/confiança | RN Firebase Messaging + App Check | somente development/production build |
 | Backend | Auth anônima + Functions + Firestore | registro, quórum e fan-out nativos |
@@ -28,11 +28,16 @@ contém esses módulos.
 3. O JavaScript faz GET relativo com a sessão da própria WebView. Ele nunca lê
    `document.cookie` nem envia cookie/token ao React Native.
 4. O lado nativo valida origem, canal, request ID, status, tamanho e schema.
-5. A UI mostra período, métricas, mudanças, busca, notas, publicação, resultado e
-   faltas. Valores acadêmicos permanecem somente no estado React.
-6. AsyncStorage recebe apenas hashes SHA-256 truncados, flags e rótulos para
+5. Para o cartão, a mesma WebView navega serialmente para
+   `cartao.app.ufgd.edu.br`; a ponte deriva o ID/hash somente do perfil autenticado
+   e busca foto, saldos e a primeira página dos extratos RU/Cantina. A UI não pode
+   informar nem enumerar identificadores.
+6. A UI usa a paleta oficial verde da UFGD e mostra perfil/foto, saldos, busca de
+   notas, resultado, faltas, cartão mascarado e movimentações recentes.
+7. AsyncStorage recebe apenas hashes SHA-256 truncados, flags e rótulos para
    detectar mudanças na próxima consulta.
-7. Sair remonta/destrói a WebView privada. O histórico hash-only pode ser apagado
+8. Foto, saldos, cartão e extratos ficam somente em memória; sair remonta/destrói
+   a WebView privada. O histórico hash-only pode ser apagado
    separadamente na aba Privacidade.
 
 O Expo Go não executa o push/background Firebase deste projeto. Atualizações são
@@ -53,7 +58,8 @@ execução. O produto comunica checagens agendadas, não tempo real garantido.
 ```text
 app/App.tsx                    seletor seguro de runtime
 app/src/runtime/              capacidades Expo Go/native
-app/src/expo-go/              sessão, bridge, validação, cliente e dashboard
+app/src/expo-go/              sessão, bridges, cartão, validação, cliente e dashboard
+app/assets/                   ícone público UFGDNet
 app/src/native/               app Firebase e login com cookie manager
 app/src/auth/                 SecureStore do runtime nativo
 app/src/core/                 API, visão acadêmica, snapshot, hash e diff
@@ -69,7 +75,7 @@ app/tests/                    core, ciclo e segurança Expo Go
 
 Em 15/07/2026:
 
-- `npm test`: 24/24;
+- `npm test`: 27/27;
 - `npm run typecheck`: TypeScript strict;
 - `npm run doctor`: 18/18;
 - `npm audit --audit-level=high`: nenhuma advisory alta ou crítica; moderadas

@@ -41,7 +41,9 @@ backend Firebase device-sentinel.
 - `App.tsx` detecta `StoreClient` antes de carregar qualquer módulo Firebase/nativo.
 - Login ocorre na página oficial dentro de uma WebView `incognito` restrita à UFGD.
 - Cookie, senha e `document.cookie` nunca atravessam a ponte React Native.
-- A ponte aceita somente períodos, turmas e notas, por GET relativo de mesma origem.
+- A ponte acadêmica aceita somente períodos, turmas e notas, por GET relativo.
+- A ponte Cartão deriva ID/hash da própria página e retorna apenas foto, final
+  mascarado, saldos e até 40 movimentações por origem; nenhum valor é persistido.
 - Respostas têm limite, protocolo e schema validados antes de chegar à UI.
 - Notas/faltas ficam em memória; AsyncStorage recebe somente hash, flag e rótulo.
 - Expo Go não promete push/background; o aluno atualiza ao abrir ou puxar a tela.
@@ -110,7 +112,7 @@ build limpo. Nesta máquina, Docker pode não estar instalado.
 ## Estado verificado em 15/07/2026
 
 - Python: 24/24 testes.
-- App: 24/24 testes, TypeScript strict e Expo Doctor 18/18.
+- App: 27/27 testes, TypeScript strict e Expo Doctor 18/18.
 - Functions: build strict + 5/5 testes.
 - Expo SDK 54 / React Native 0.81 / React 19 para compatibilidade com o Expo Go
   físico disponível durante a transição de SDK.

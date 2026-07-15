@@ -61,10 +61,14 @@ Este runtime prioriza visualização imediata no iPhone sem custom native module
    Cada um faz GET relativo usando a sessão da própria WebView.
 4. O protocolo limita mensagens e valida origem, request ID, status e schema.
    Redirect de login vira expiração de sessão.
-5. A camada `academic.ts` produz simultaneamente a visão em memória e o snapshot
+5. Para foto/cartão, a fila navega a mesma WebView para a origem Cartão. ID e
+   hash são descobertos da página do usuário; não existem parâmetros de enumeração.
+   Foto, saldos e primeira página dos extratos voltam apenas para memória.
+6. A camada `academic.ts` produz simultaneamente a visão em memória e o snapshot
    hash-only. Somente este último vai ao AsyncStorage.
 
-Não há extração/persistência do cookie e não há backend nesse fluxo. Expo Go
+Não há extração/persistência do cookie e não há backend nesse fluxo. Dados do
+cartão também não entram em AsyncStorage. Expo Go
 não fornece o background/push nativo, então a consulta é sempre foreground.
 
 ## Mobile device-sentinel nativo
