@@ -1,5 +1,7 @@
 # Índice de rotas observadas
 
+Atualizado em 15/07/2026.
+
 Este arquivo é o índice operacional. Schemas acadêmicos ficam em
 [API-MAP.md](API-MAP.md); detalhes do cartão em [CARTAO-MAP.md](CARTAO-MAP.md).
 Todas as observações foram feitas com conta própria. Não use este mapa para
@@ -57,8 +59,10 @@ GET  /login       -> página e authenticity token
 POST /login_form  -> credenciais enviadas diretamente à UFGD; emite UFGDNET
 ```
 
-`server/auth.py` implementa esse fluxo localmente. No app, a WebView faz o login
-e o código nunca recebe a senha.
+`server/auth.py` implementa esse fluxo localmente. Nos dois runtimes do app, a
+WebView faz o login e o código nunca recebe a senha. No Expo Go, o cookie também
+nunca sai da WebView; no build nativo ele é extraído depois do redirect e guardado
+no SecureStore para possibilitar background.
 
 ## Respostas esperadas
 

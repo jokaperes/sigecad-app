@@ -12,6 +12,7 @@ valor das notas nos snapshots.
 
 | Modo | Onde o token fica | Notificação | Estado |
 |---|---|---|---|
+| Expo Go no iPhone | WebView privada; cookie nunca é extraído | Atualização ao abrir/puxar | Pronto para teste físico com SDK 54 |
 | Mobile device-sentinel | Keychain/Keystore do aluno | Push Firebase | Implementado; exige Firebase e device build |
 | Self-host pessoal | `.env` da própria máquina | Resend ou console | Pronto para uso |
 | Servidor central | SQLite, cifrado com AES-256-GCM | Resend ou console | Pronto, com risco operacional documentado |
@@ -48,11 +49,11 @@ Detalhes em [SELF-HOSTING.md](SELF-HOSTING.md).
 
 ## App mobile
 
-O app usa Expo 57, React Native 0.86, Firebase App Check, Authentication anônima,
-Cloud Functions e FCM. O login acontece numa WebView restrita a `*.ufgd.edu.br`;
-o cookie fica no armazenamento seguro do aparelho. Um silent push acorda alguns
-sentinelas, que consultam o SIGECAD diretamente e reportam somente hash e evento,
-nunca token ou valor de nota.
+O app usa Expo SDK 54, React Native 0.81 e React 19 e possui dois runtimes. No
+Expo Go, o login e o cookie permanecem em uma WebView privada; uma ponte de mesma
+origem permite somente as três consultas acadêmicas de leitura e exibe as notas
+enquanto o app está aberto. No development build, Firebase App Check, Functions
+e FCM ativam o fluxo device-sentinel em segundo plano.
 
 ```bash
 cd app
@@ -60,22 +61,24 @@ npm ci
 npm test
 npm run typecheck
 npm run doctor
+npm run start:go
 ```
 
-Partes nativas não funcionam no Expo Go. Consulte [app/README.md](app/README.md).
+Abra o QR no Expo Go do iPhone. Alertas push/background continuam exigindo um
+development build. Consulte [app/README.md](app/README.md).
 
 ## Testes e verificações
 
 ```bash
 python3 -m unittest discover -s tests -v       # 24 testes
-cd app && npm test && npm run typecheck        # 16 testes + TypeScript strict
+cd app && npm test && npm run typecheck        # 24 testes + TypeScript strict
 cd ../functions && npm test                    # build + 5 testes de policy
 ```
 
 Auditoria atual:
 
 - Python: nenhuma vulnerabilidade conhecida em `requirements.txt` pelo `pip-audit`.
-- Expo: nenhuma vulnerabilidade alta/crítica; Expo Doctor passa 20/20.
+- Expo: nenhuma vulnerabilidade alta/crítica; Expo Doctor passa 18/18.
 - Firebase Functions: advisories moderados permanecem em dependências upstream;
   a versão corrigida sugerida de `firebase-admin` ainda não é aceita pelo peer
   oficial de `firebase-functions`, portanto não foi forçada.
@@ -88,15 +91,19 @@ personal.py                loop self-host de um aluno
 server/                    serviço central: auth, cripto, SQLite, poll e Resend
 tests/                     testes Python
 app/
-  App.tsx                  fluxo e UI mobile
-  src/auth/                login CAS e token seguro
-  src/core/                cliente, snapshot, hashes e diff em TypeScript
+  App.tsx                  seleciona Expo Go ou runtime nativo sem importar módulos incompatíveis
+  app.config.js            inclui Google Services apenas quando os arquivos locais existem
+  src/expo-go/             sessão WebView, ponte validada e dashboard iPhone
+  src/native/              login, consentimento, push e painel do development build
+  src/runtime/             detecção de capacidades do runtime
+  src/auth/                token seguro usado somente pelo runtime nativo
+  src/core/                cliente, visão acadêmica, snapshot, hashes e diff
   src/sentinel/            ciclo disparado por silent push
   src/backend/             App Check, Auth e Cloud Functions
   src/push/                cadastro e handlers FCM
   src/storage/             snapshots e registro local
   src/ui/                  componentes e tema
-  tests/                   hash, paridade e ciclo do sentinela
+  tests/                   core, ciclo do sentinela e segurança da ponte Expo Go
 functions/
   src/index.ts             callables, quórum, fan-out, scheduler e exclusão LGPD
   src/policy.ts            validações puras compartilhadas/testadas

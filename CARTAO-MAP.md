@@ -1,7 +1,11 @@
 # Portal Cartão UFGD
 
+Atualizado em 15/07/2026.
+
 Host observado: `cartao.app.ufgd.edu.br`. Usa a mesma sessão UFGD. O suporte no
 projeto é estritamente para consultar o cartão pertencente à conta autenticada.
+O dashboard Expo Go não chama essas rotas nem exibe foto, cartão ou saldo; o
+recurso permanece exclusivo do CLI local `sigecad.py --show-card`.
 
 ## Fluxo implementado
 

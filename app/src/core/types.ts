@@ -19,6 +19,7 @@ export interface Turma {
   disciplina: string;
   resultado: string | null;
   faltas: number | null;
+  limite_faltas?: number | null;
   tem_notas: boolean;
 }
 

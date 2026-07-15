@@ -1,5 +1,8 @@
 # Self-hosting pessoal
 
+Atualizado em 15/07/2026. Este modo é independente dos runtimes Expo Go e Firebase
+descritos em [MOBILE.md](MOBILE.md).
+
 O token e o estado ficam na máquina do próprio aluno. Este é o modo mais simples
 e privado para monitoramento contínuo sem Firebase.
 

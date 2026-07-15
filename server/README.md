@@ -1,5 +1,8 @@
 # Servidor central opcional
 
+Atualizado em 15/07/2026. Este componente não participa do fluxo Expo Go, que
+consulta a UFGD diretamente na WebView do aparelho e não envia dados ao backend.
+
 Modo multiusuário que consulta a UFGD 24/7 e envia email. Tokens ficam cifrados no
 SQLite, mas são decifrados em RAM durante a consulta. Para maior privacidade,
 prefira o app device-sentinel ou self-host.

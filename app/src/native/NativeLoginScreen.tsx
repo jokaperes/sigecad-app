@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { WebView, type WebViewNavigation } from "react-native-webview";
 import CookieManager from "@preeternal/react-native-cookie-manager";
-import { saveToken } from "./token";
+import { saveToken } from "../auth/token";
 import { Brand, Notice } from "../ui/components";
 import { colors, radius, spacing } from "../ui/theme";
 
@@ -15,7 +15,7 @@ const SIGECAD_HOST = "https://sigecad-academico.app.ufgd.edu.br";
  * Login CAS inside the official UFGD page. The app never reads the password;
  * after the redirect it stores only UFGDNET in the device keychain.
  */
-export function LoginScreen({ onDone }: { onDone: () => void }) {
+export function NativeLoginScreen({ onDone }: { onDone: () => void }) {
   const completed = useRef(false);
   const [error, setError] = useState<string | null>(null);
 

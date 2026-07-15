@@ -36,6 +36,16 @@ backend Firebase device-sentinel.
 - App Check + vínculo de turma + quórum de devices protegem o fan-out.
 - Reports temporários são removidos após consenso ou quando expiram.
 
+### Expo Go no iPhone (visualização foreground)
+
+- `App.tsx` detecta `StoreClient` antes de carregar qualquer módulo Firebase/nativo.
+- Login ocorre na página oficial dentro de uma WebView `incognito` restrita à UFGD.
+- Cookie, senha e `document.cookie` nunca atravessam a ponte React Native.
+- A ponte aceita somente períodos, turmas e notas, por GET relativo de mesma origem.
+- Respostas têm limite, protocolo e schema validados antes de chegar à UI.
+- Notas/faltas ficam em memória; AsyncStorage recebe somente hash, flag e rótulo.
+- Expo Go não promete push/background; o aluno atualiza ao abrir ou puxar a tela.
+
 ### Self-host
 
 `personal.py` mantém o token na máquina do aluno, persiste `state.json` hash-only e
@@ -52,7 +62,9 @@ No Docker, `SIGECAD_DB_PATH=/app/server/data/data.db` aponta para o volume persi
 ```text
 CLI/self-host: token -> períodos -> turmas -> notas -> hash snapshot -> diff -> alerta
 
-Mobile: CAS -> SecureStore -> snapshot/baseline local -> registro Firebase
+Expo Go: CAS na WebView -> GET same-origin -> notas em RAM -> hash/diff local
+
+Mobile nativo: CAS -> SecureStore -> snapshot/baseline local -> registro Firebase
         scheduler -> silent push -> snapshot local -> report + quórum -> push visível
 
 Central: token cifrado -> decrypt em RAM -> snapshot -> SQLite hash-only -> Resend
@@ -64,7 +76,12 @@ Central: token cifrado -> decrypt em RAM -> snapshot -> SQLite hash-only -> Rese
 - `personal.py`: execução pessoal e loop mínimo de 1h.
 - `server/`: `auth.py`, `crypto.py`, `store.py`, `register.py`, `poller.py`, `notifier.py`.
 - `tests/test_diff.py`: 24 testes Python.
-- `app/App.tsx`: máquina de estados e telas mobile.
+- `app/App.tsx`: seleciona Expo Go ou native build por capacidade do runtime.
+- `app/app.config.js`: omite Google Services ausentes no Expo Go e os inclui
+  automaticamente quando os arquivos locais existem para build nativo.
+- `app/src/expo-go/`: WebView privada, ponte allowlist, validação e UI de notas.
+- `app/src/native/`: fluxo Firebase/push e login com cookie manager.
+- `app/src/runtime/`: detecção do ambiente sem avaliar módulos incompatíveis.
 - `app/src/core/`: port TypeScript do snapshot/diff.
 - `app/src/ui/`: tema e componentes reutilizáveis.
 - `app/src/storage/`: baseline hash-only e estado de registro.
@@ -90,12 +107,13 @@ npm test
 Se Docker estiver disponível, também execute `docker compose config --quiet` e um
 build limpo. Nesta máquina, Docker pode não estar instalado.
 
-## Estado verificado em 14/07/2026
+## Estado verificado em 15/07/2026
 
 - Python: 24/24 testes.
-- App: 16/16 testes, TypeScript strict e Expo Doctor 20/20.
+- App: 24/24 testes, TypeScript strict e Expo Doctor 18/18.
 - Functions: build strict + 5/5 testes.
-- Expo SDK 57 / React Native 0.86 / React 19.
+- Expo SDK 54 / React Native 0.81 / React 19 para compatibilidade com o Expo Go
+  físico disponível durante a transição de SDK.
 - Firebase ainda precisa de projeto real, arquivos Google Services, App Check e device build.
 - Resend e deploy central precisam de secrets externos.
 - O portal de cartão pode retornar 5xx; tratar como indisponibilidade, sem retry agressivo.

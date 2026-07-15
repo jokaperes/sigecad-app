@@ -1,66 +1,80 @@
-# App mobile — stack e decisões
+# App mobile — runtimes e decisões
+
+Atualizado em 15/07/2026. O app tem uma entrada única e dois runtimes para que a
+visualização funcione no Expo Go sem enfraquecer o modo nativo de alertas.
 
 ## Stack atual
 
-| Área | Tecnologia | Motivo |
+| Área | Tecnologia | Comportamento |
 |---|---|---|
-| Runtime | Expo 57, React Native 0.86, React 19 | New Architecture e um código iOS/Android |
+| Runtime | Expo SDK 54, React Native 0.81, React 19 | Compatível com o Expo Go físico atual |
 | Login | `react-native-webview` | credenciais ficam na página oficial UFGD |
-| Cookie | `@preeternal/react-native-cookie-manager` | TurboModule compatível com New Architecture |
-| Token | `expo-secure-store` | Keychain/Keystore; disponível em background após primeiro unlock |
-| Estado local | AsyncStorage | registro e snapshots que contêm somente hashes/rótulos |
-| Push | React Native Firebase Messaging | silent/data-only e push visível via FCM |
-| Confiança | Firebase App Check | Play Integrity e App Attest |
-| Backend | Firebase Auth anônimo + Functions + Firestore | uid por device, callables e fan-out |
-| UI | React Native StyleSheet | tema/componentes próprios, sem dependência visual pesada |
+| Expo Go | WebView same-origin + AsyncStorage | notas foreground; cookie não sai da WebView |
+| Native build | cookie manager + SecureStore | token local para ciclos em background |
+| Push/confiança | RN Firebase Messaging + App Check | somente development/production build |
+| Backend | Auth anônima + Functions + Firestore | registro, quórum e fan-out nativos |
+| UI | React Native StyleSheet | dashboard responsivo sem biblioteca visual pesada |
 
-As partes nativas não funcionam no Expo Go. Use development build.
+`App.tsx` consulta `expo-constants` e só faz `require()` do app nativo fora do
+Expo Go. Assim, Firebase e cookie manager não são avaliados em um cliente que não
+contém esses módulos.
 
-## Telas e estados
+## Expo Go no iPhone
 
-`App.tsx` controla:
+1. `PortalSession` abre o CAS oficial em WebView `incognito`, com cache desativado
+   e navegação limitada a HTTPS em `ufgd.edu.br`.
+2. Depois do redirect acadêmico, a ponte injeta apenas três operações fixas:
+   `periodos`, `turmas` e `notas`.
+3. O JavaScript faz GET relativo com a sessão da própria WebView. Ele nunca lê
+   `document.cookie` nem envia cookie/token ao React Native.
+4. O lado nativo valida origem, canal, request ID, status, tamanho e schema.
+5. A UI mostra período, métricas, mudanças, busca, notas, publicação, resultado e
+   faltas. Valores acadêmicos permanecem somente no estado React.
+6. AsyncStorage recebe apenas hashes SHA-256 truncados, flags e rótulos para
+   detectar mudanças na próxima consulta.
+7. Sair remonta/destrói a WebView privada. O histórico hash-only pode ser apagado
+   separadamente na aba Privacidade.
 
-- inicialização/App Check com retry;
-- login UFGD em navegador incorporado e restrito por hostname;
-- consentimento explícito com email opcional;
-- cadastro/sincronização com baseline local;
-- painel de status, quantidade e códigos de turma;
-- erro, loading, vazio e atualização;
-- exclusão LGPD confirmada, incluindo token e snapshots locais.
+O Expo Go não executa o push/background Firebase deste projeto. Atualizações são
+foreground ao abrir, tocar em atualizar ou puxar a tela.
 
-`src/ui/theme.ts` concentra cores, espaçamento e raios. `components.tsx` fornece
-layout seguro, marca, cards, botões acessíveis e avisos. A UI respeita safe areas,
-teclado, estados busy/disabled e alvos de toque de no mínimo 48 px.
+## Native build e background
 
-## Background
+`src/native/NativeApp.tsx` preserva o fluxo device-sentinel: login CAS, extração
+controlada do cookie, SecureStore, consentimento, registro Firebase e exclusão.
+O scheduler envia silent push deduplicado; `src/push/handlers.ts` executa o ciclo,
+que só avança o baseline depois de o report ser aceito.
 
-O scheduler envia um silent push deduplicado. `src/push/handlers.ts` obtém o token
-local e chama `runSentinelCycle`. O ciclo só atualiza o baseline depois que o
-report foi aceito; se a rede falhar, tenta novamente no próximo wake.
+Background no iOS é best-effort: force-quit e políticas de bateria podem impedir
+execução. O produto comunica checagens agendadas, não tempo real garantido.
 
-Limitações do sistema operacional continuam válidas: force-quit no iOS e políticas
-de bateria podem impedir execução. O produto deve comunicar “checagens agendadas”,
-não promessa de tempo real.
+## Estrutura mobile
+
+```text
+app/App.tsx                    seletor seguro de runtime
+app/src/runtime/              capacidades Expo Go/native
+app/src/expo-go/              sessão, bridge, validação, cliente e dashboard
+app/src/native/               app Firebase e login com cookie manager
+app/src/auth/                 SecureStore do runtime nativo
+app/src/core/                 API, visão acadêmica, snapshot, hash e diff
+app/src/backend/              App Check/Auth/Functions
+app/src/push/                 cadastro e handlers FCM
+app/src/sentinel/             ciclo de consulta/report/baseline
+app/src/storage/              registro, snapshots e preview hash-only
+app/src/ui/                   tema e componentes compartilhados
+app/tests/                    core, ciclo e segurança Expo Go
+```
 
 ## Compatibilidade verificada
 
-Em 14/07/2026:
+Em 15/07/2026:
 
-- `npm test`: 16/16;
+- `npm test`: 24/24;
 - `npm run typecheck`: TypeScript strict;
-- `npm run doctor`: 20/20;
-- `npm audit --omit=dev`: nenhuma advisory alta ou crítica; moderadas upstream
-  permanecem sem correção segura na linha atual.
+- `npm run doctor`: 18/18;
+- `npm audit --audit-level=high`: nenhuma advisory alta ou crítica; moderadas
+  upstream exigiriam migração quebradora para SDK 57 e não foram forçadas.
 
-Isso não substitui build nativo. Falta validar pods/Gradle, cookies HttpOnly,
-notificações, App Check e background em aparelhos físicos.
-
-## Próximos testes em device
-
-1. Login real em Android e iOS, inclusive leitura do cookie WebKit.
-2. Token acessível com tela bloqueada após primeiro unlock.
-3. Push token refresh e re-registro.
-4. Silent push com app em background, encerrado e após reboot.
-5. App Check debug/development e attestation de produção.
-6. Exclusão completa no Firestore/Auth e limpeza local.
-7. Dois devices da mesma turma chegando ao mesmo `stateHash`.
+Ainda requer teste manual no iPhone: login CAS real, leitura das respostas reais,
+layout em tamanhos de tela e expiração/relogin. O caminho nativo requer, além disso,
+Google Services, build, App Check, push e background em aparelhos físicos.

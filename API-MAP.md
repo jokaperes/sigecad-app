@@ -1,5 +1,7 @@
 # Mapa da API acadêmica UFGD
 
+Atualizado em 15/07/2026.
+
 Base observada: `https://sigecad-academico.app.ufgd.edu.br`. Mapeamento feito
 somente com conta própria e requisições GET. Rotas e schemas são não oficiais e
 podem mudar sem aviso.
@@ -35,8 +37,10 @@ podem mudar sem aviso.
 | `/rest/pendenciasbiblioteca` | — | pendências; já apresentou 5xx | pessoal |
 | `/rest/administrador/academicos` | — | rota administrativa; fora do escopo | proibida |
 
-O produto usa apenas as três primeiras rotas. As demais permanecem documentadas
-para entendimento do portal, não como autorização para coleta.
+O produto usa apenas as três primeiras rotas. No Expo Go essa allowlist também é
+aplicada pela ponte injetada, que aceita somente GET relativo de mesma origem e
+IDs devolvidos pela sessão. As demais permanecem documentadas para entendimento
+do portal, não como autorização para coleta.
 
 ## Schemas usados
 

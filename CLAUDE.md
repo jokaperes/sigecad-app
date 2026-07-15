@@ -7,7 +7,9 @@ canônica para regras de segurança, arquitetura, estrutura e comandos de valida
 
 - Produto: notificador independente e somente leitura para a própria conta UFGD.
 - Core: `sigecad.py`; nunca persiste valores de nota no snapshot.
-- App: Expo 57/React Native 0.86, login CAS em WebView, token em SecureStore.
+- App: Expo SDK 54/React Native 0.81/React 19, com runtime Expo Go e runtime nativo.
+- Expo Go: cookie fica na WebView privada, notas só em memória e snapshot hash-only.
+- Nativo: token em SecureStore, Firebase device-sentinel, App Check, quórum e FCM.
 - Backend principal: Firebase device-sentinel, App Check, quórum e FCM.
 - Alternativas: `personal.py` (recomendado para self-host) e `server/` central cifrado.
 - Idioma do código/documentação: português; nomes técnicos podem permanecer em inglês.
@@ -25,6 +27,7 @@ canônica para regras de segurança, arquitetura, estrutura e comandos de valida
 ```bash
 python3 -m unittest discover -s tests -v
 cd app && npm test && npm run typecheck
+cd app && npm run doctor
 cd ../functions && npm test
 ```
 

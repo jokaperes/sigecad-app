@@ -5,6 +5,19 @@ preencher contato, finalidade e retenção antes de aceitar usuários reais.
 
 ## Dados por modo
 
+### Expo Go no iPhone
+
+- Senha e cookie: permanecem na WebView privada da UFGD; o código React Native
+  não lê `document.cookie` nem persiste a sessão.
+- Valores de nota, faltas e resultado: somente em memória enquanto o painel está
+  aberto.
+- Estado local: hashes unidirecionais truncados, flag de publicação, rótulos e
+  timestamp para detectar mudanças.
+- Backend/terceiros: nenhum dado é enviado pelo app nesse modo; as requisições
+  de leitura acontecem dentro da sessão oficial UFGD.
+- Saída: remonta a WebView `incognito`; o usuário também pode apagar o histórico
+  hash-only na aba Privacidade.
+
 ### CLI e self-host
 
 - Token: ambiente/`.env` da máquina do próprio aluno.
@@ -15,7 +28,7 @@ preencher contato, finalidade e retenção antes de aceitar usuários reais.
 
 Não há controlador central neste modo além do próprio usuário.
 
-### App device-sentinel
+### App device-sentinel nativo
 
 No aparelho:
 
@@ -53,6 +66,8 @@ O botão de cadastro do app e `register.py --consent` registram esse ato.
 
 ## Direitos do titular
 
+- Expo Go: “Apagar histórico local” remove snapshots; “Sair e apagar sessão”
+  destrói o navegador privado.
 - App: “Apagar meus dados e sair” remove usuário, reports, vínculos, auth anônima,
   token e snapshots locais.
 - Central: `register.py del <email>` remove usuário e registros em cascade.

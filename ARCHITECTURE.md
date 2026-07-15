@@ -1,6 +1,6 @@
 # Arquitetura do SIGECAD Alerta
 
-Atualizado em 14/07/2026. Este documento descreve o código existente; itens que
+Atualizado em 15/07/2026. Este documento descreve o código existente; itens que
 dependem de Firebase/device real estão marcados como pendentes de integração.
 
 ## Princípios
@@ -18,18 +18,18 @@ dependem de Firebase/device real estão marcados como pendentes de integração.
                     períodos / turmas / notas
                          ▲              ▲
                          │ GET          │ GET
-               ┌─────────┴──────┐  ┌────┴───────────┐
-               │ app no device  │  │ Python local   │
-               │ token seguro   │  │ ou central     │
-               │ hash + diff    │  │ hash + diff    │
-               └───────┬────────┘  └──────┬─────────┘
-                       │ report           │ Resend/console
-                       ▼                  ▼
-               Firebase Functions     aluno individual
-               quórum + fan-out
-                       │
-                       ▼
-                    push FCM
+          ┌─────────┴─────────┐  ┌─────────┴───────┐  ┌──────┴───────────┐
+          │ Expo Go iPhone    │  │ native build    │  │ Python local   │
+          │ WebView privada   │  │ token seguro    │  │ ou central     │
+          │ UI + hash/diff    │  │ hash + report   │  │ hash + diff    │
+          └──────────────────┘  └────────┬─────────┘  └──────┬─────────┘
+                                     │ report           │ Resend/console
+                                     ▼                  ▼
+                             Firebase Functions     aluno individual
+                             quórum + fan-out
+                                     │
+                                     ▼
+                                  push FCM
 ```
 
 ## Core de dados
@@ -50,13 +50,30 @@ No modo sentinela, o hash da turma usa somente `publicar`. Valores são pessoais
 incluí-los faria a troca de sentinela gerar falso positivo. A consequência é que
 uma correção de valor já publicado só é detectável no modo individual.
 
-## Mobile device-sentinel
+## Expo Go foreground
+
+Este runtime prioriza visualização imediata no iPhone sem custom native modules:
+
+1. A entrada detecta `ExecutionEnvironment.StoreClient` e não avalia imports de
+   Firebase, SecureStore ou cookie manager do caminho nativo.
+2. O CAS e o SIGECAD abrem em WebView privada restrita a HTTPS da UFGD.
+3. Uma ponte injetada somente na origem acadêmica oferece três comandos fixos.
+   Cada um faz GET relativo usando a sessão da própria WebView.
+4. O protocolo limita mensagens e valida origem, request ID, status e schema.
+   Redirect de login vira expiração de sessão.
+5. A camada `academic.ts` produz simultaneamente a visão em memória e o snapshot
+   hash-only. Somente este último vai ao AsyncStorage.
+
+Não há extração/persistência do cookie e não há backend nesse fluxo. Expo Go
+não fornece o background/push nativo, então a consulta é sempre foreground.
+
+## Mobile device-sentinel nativo
 
 É o alvo principal de privacidade porque o token não sai do aparelho.
 
 ### Cadastro
 
-1. `LoginScreen` abre exclusivamente domínios `ufgd.edu.br` em WebView.
+1. `NativeLoginScreen` abre exclusivamente domínios `ufgd.edu.br` em WebView.
 2. O usuário digita credenciais na página oficial; o app lê apenas `UFGDNET` após
    o redirect.
 3. SecureStore guarda o cookie no Keychain/Keystore como
@@ -133,6 +150,7 @@ produção, use KMS/HSM, backups cifrados, logs mínimos e resposta a incidente.
 
 ## Limites e pendências
 
+- O runtime Expo Go ainda precisa de validação manual do CAS e layout em iPhone.
 - Firebase real, Google Services, App Check e dev build ainda não foram testados
   ponta a ponta em device.
 - Silent push precisa ser validado em iOS e Android físicos.
