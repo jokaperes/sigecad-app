@@ -1,0 +1,17 @@
+node_modules/
+.expo/
+android/
+ios/
+*.apk
+*.keystore
+google-services.json
+GoogleService-Info.plist
+.env
+*.log
+.DS_Store
+__pycache__/
+*.pyc
+state.json
+raw/
+.hmac-key
+.sigecad-token
