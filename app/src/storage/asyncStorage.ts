@@ -1,20 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Items } from "../core/types";
-
-export interface TurmaState {
-  items: Items;
-  labels: Record<string, string>;
-}
-
-export interface CycleStorage {
-  getTurmaState(code: string): Promise<TurmaState | null>;
-  setTurmaState(code: string, state: TurmaState): Promise<void>;
-}
+import type { CycleStorage, TurmaState } from "../sentinel/cycle";
 
 const REGISTRATION_KEY = "app:registration:v1";
 const PREVIEW_STATE_KEY = "app:expo-go-preview:v1";
 const LEGACY_DESIGN_PREFERENCES_KEY = "app:design-preferences:v2";
-
 const DESIGN_PREFERENCES_KEY = "app:design-preferences:v3";
 
 export interface DesignPreferences {

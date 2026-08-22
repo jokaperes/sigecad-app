@@ -135,8 +135,6 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   const [browserUri, setBrowserUri] = useState(SIGECAD_HOME);
 
   useEffect(() => {
-
-
     const timer = setTimeout(() => { void cleanupAcademicDocumentCache(); }, 10_000);
     return () => clearTimeout(timer);
   }, []);
@@ -197,8 +195,6 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       }, REQUEST_TIMEOUT_MS);
       navigationWait.current = { origin, resolve, reject, timeout };
       const destination = origin === CARD_ORIGIN ? CARD_URL : SIGECAD_HOME;
-
-
       if (browserUri === destination) webView.current?.reload();
       else setBrowserUri(destination);
     });
@@ -269,11 +265,6 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
 
       const execute = async (index: number) => {
         const item = items[index];
-        if (item.kind === "notas" && index > 0) {
-
-
-          await new Promise<void>((resolve) => setTimeout(resolve, 25 * (index % 4)));
-        }
         try {
           const value = await injectRequest(item.kind, item.numericId);
           if (item.kind === "periodos" && item.numericId === undefined) {
@@ -285,13 +276,12 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
         }
       };
 
-
       if (installedBridge.current !== ACADEMIC_BRIDGE_REVISION && pendingIndices.length) {
         await execute(pendingIndices.shift() as number);
       }
 
       let cursor = 0;
-      const workers = Array.from({ length: Math.min(4, pendingIndices.length) }, async () => {
+      const workers = Array.from({ length: Math.min(6, pendingIndices.length) }, async () => {
         while (cursor < pendingIndices.length) {
           const index = pendingIndices[cursor++];
           await execute(index);
@@ -524,8 +514,6 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
             ));
           });
       }
-
-
       return false;
     }
     if (safeHttpsOrigin(url) === WEBDOC_ORIGIN) return false;
@@ -679,8 +667,6 @@ function messageOf(cause: unknown): string {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-
-
   contentLayer: { flex: 1, position: "relative", zIndex: 1 },
   loginSafe: { backgroundColor: colors.background },
   loginShell: { paddingHorizontal: 20, paddingTop: 18, gap: spacing.md },
@@ -706,11 +692,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   browser: { flex: 1, backgroundColor: colors.surface },
-
-
   hiddenBrowser: { ...StyleSheet.absoluteFillObject, opacity: 0.01, zIndex: 0 },
-
-
   hiddenBrowserAndroid: { position: "absolute", width: 2, height: 2, left: 0, bottom: 0, opacity: 0.01, zIndex: 0 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm },
   expiredOverlay: {

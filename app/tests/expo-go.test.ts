@@ -37,6 +37,8 @@ let failures = 0;
 let total = 0;
 const portalSessionSourcePath = resolve(dirname(fileURLToPath(import.meta.url)), "../src/expo-go/PortalSession.tsx");
 const designSourcePath = resolve(dirname(fileURLToPath(import.meta.url)), "../src/expo-go/design/DesignExpoGoApp.tsx");
+const appSourcePath = resolve(dirname(fileURLToPath(import.meta.url)), "../App.tsx");
+const expoGoEntryPath = resolve(dirname(fileURLToPath(import.meta.url)), "../src/expo-go/ExpoGoApp.tsx");
 
 async function check(name: string, test: () => void | Promise<void>) {
   total += 1;
@@ -81,6 +83,19 @@ await check("detecção mantém Firebase fora do Expo Go", () => {
   assert(detectRuntimeMode("standalone", "standalone") === "native-build");
 });
 
+await check("entrada só monta o dashboard e não apaga a sessão no boot", () => {
+  const app = readFileSync(appSourcePath, "utf8");
+  const entry = readFileSync(expoGoEntryPath, "utf8");
+  assert(app.includes("<ExpoGoApp />"));
+  assert(!app.includes("NativeApp"), "App.tsx ainda monta NativeApp");
+  assert(!app.includes("isExpoGo"), "App.tsx ainda escolhe runtime nativo");
+  assert(!app.includes("wipeAcademicPersistence"), "App.tsx ainda limpa persistência no boot");
+  assert(!app.includes("clearToken"), "App.tsx ainda zera token no boot");
+  assert(!app.includes("useEffect"), "App.tsx não deve ter efeito de boot");
+  assert(entry.includes("DesignExpoGoApp as ExpoGoApp"));
+  assert(!entry.includes("ExpoGoDashboard"));
+});
+
 await check("dashboard fica acima da WebView oculta no Android", () => {
   const source = readFileSync(portalSessionSourcePath, "utf8");
   assert(source.includes('<View style={styles.contentLayer}>{children}</View>'));
@@ -113,6 +128,7 @@ await check("sessão reutiliza períodos e instala cada bridge uma vez por pági
   assert(source.includes("const needsBootstrap = installedBridge.current !== revision"));
   assert(source.includes('installedBridge.current = null'));
   assert(source.includes("await execute(pendingIndices.shift() as number)"));
+  assert(source.includes("Math.min(6, pendingIndices.length)"));
   assert(source.includes("[SIGECAD request] ${stage}: ${Date.now() - item.startedAt}ms"));
   assert(!source.includes("[SIGECAD request] ${numericId}"));
 });
@@ -259,7 +275,8 @@ await check("Home pinta antes de cartão, foto, extrato e dados secundários", (
   const cardSummary = source.indexOf('loadStudentCardSummary(request)');
   const fullCard = source.indexOf('loadStudentCard(request)');
   const secondary = source.indexOf('hydrateAcademicNotes(academicRequest, startup)');
-  assert(painted > 0 && painted < cardSummary && cardSummary < fullCard && fullCard < secondary);
+  assert(painted > 0 && painted < cardSummary && cardSummary < secondary && secondary < fullCard);
+  assert(!source.includes("25 * (index % 4)"), "atraso artificial de notas voltou");
   assert(source.includes("<SectionList"));
   assert(source.includes('route === "documents"'));
 });
@@ -281,8 +298,6 @@ await check("Documentos não cancelam a própria carga e consultam em um lote", 
 });
 
 await check("bridges injetados são JavaScript sintaticamente válido", () => {
-
-
   new Function(BRIDGE_BOOTSTRAP);
   new Function(CARD_BRIDGE_BOOTSTRAP);
 });

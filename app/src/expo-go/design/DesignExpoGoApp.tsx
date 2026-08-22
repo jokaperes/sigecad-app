@@ -259,8 +259,6 @@ function DesignDashboard() {
   }, []);
 
   const refresh = useCallback(async (manual = false) => {
-
-
     if (refreshBusy.current) return;
     refreshBusy.current = true;
     let backgroundScheduled = false;
@@ -276,8 +274,6 @@ function DesignDashboard() {
     setSecondaryPhase("loading");
     setError(null);
     try {
-
-
       const startup = await loadAcademicStartupFast(request, requestBatch);
       const next = startup.overview;
       const currentPortal = portalDataFromStartup(startup.portal);
@@ -287,9 +283,8 @@ function DesignDashboard() {
       setInitialComplete(true);
       setRefreshing(false);
       reportLoadTiming("academic-data", startedAt);
+      reportLoadTiming("home-painted", startedAt);
       const background = (async () => {
-        await nextFrame();
-        reportLoadTiming("home-painted", startedAt);
         const cardResult = await Promise.resolve(loadStudentCardSummary(request))
           .then((value) => ({ status: "fulfilled", value }) as const)
           .catch((reason: unknown) => ({ status: "rejected", reason }) as const);
@@ -305,21 +300,6 @@ function DesignDashboard() {
           setCardError("O portal Cartão está indisponível no momento.");
           reportLoadTiming("card-summary-failed", startedAt);
         }
-        try {
-
-
-          if (!manual || !hadCardDetails) {
-            const completeCard = await loadStudentCard(request);
-            if (generation === refreshGeneration.current) {
-              setStudentCard(completeCard);
-              setCardError(null);
-            }
-            reportLoadTiming("card-full", startedAt);
-          }
-        } catch {  }
-
-
-        await nextFrame();
         try {
           const academicRequest = createBatchedPortalRequest(requestBatch);
           const [notes, complete] = await Promise.all([
@@ -353,6 +333,16 @@ function DesignDashboard() {
           }
           reportLoadTiming("secondary-failed", startedAt);
         }
+        try {
+          if (!manual || !hadCardDetails) {
+            const completeCard = await loadStudentCard(request);
+            if (generation === refreshGeneration.current) {
+              setStudentCard(completeCard);
+              setCardError(null);
+            }
+            reportLoadTiming("card-full", startedAt);
+          }
+        } catch {  }
       })();
       backgroundScheduled = true;
       void background.finally(() => { refreshBusy.current = false; });
@@ -938,8 +928,6 @@ function DocumentsScreen({ catalog, sections, loading, error, sharingKey, onShar
     () => sections.reduce((total, section) => total + section.plans.length, 0),
     [sections],
   );
-
-
   const plansAvailability: DocumentAvailability = totalPlans
     ? { available: true, supportsSocialName: false }
     : catalog?.teachingPlans ?? unavailable;
@@ -1397,8 +1385,6 @@ function BarcodeStrip({ value, compact = false, styles }: {
     setBarcode(null);
     if (!value) return () => { active = false; };
     void bwipjs.toDataURL({
-
-
       bcid: "code128",
       text: value,
       scaleX: 3,
@@ -1514,5 +1500,5 @@ function earliestHistoryTerm(items:HistoryCourse[]):string|null { const terms=it
 function chunk<T>(items:T[],size:number):T[][] { const result:T[][]=[]; for(let i=0;i<items.length;i+=size)result.push(items.slice(i,i+size)); return result; }
 function workloadLine(portal:PortalData):string { const w=portal.workload; return w?`${w.totalDone.toLocaleString("pt-BR")}h cumpridas · ${Math.max(0,w.totalRequired-w.totalDone).toLocaleString("pt-BR")}h restantes · extensão ${w.extensionDone}h de ${w.extensionTotal}h`:"Carga horária não disponível"; }
 function messageOf(cause:unknown):string { return cause instanceof Error&&cause.message?cause.message:"Não foi possível atualizar os dados da UFGD."; }
-function reportLoadTiming(stage:string,startedAt:number):void { if(__DEV__) console.info(`[SIGECAD tempo] ${stage}: ${Date.now()-startedAt}ms`); }
+function reportLoadTiming(stage:string,startedAt:number):void { console.info(`[SIGECAD tempo] ${stage}: ${Date.now()-startedAt}ms`); }
 function nextFrame():Promise<void> { return new Promise((resolve) => requestAnimationFrame(() => resolve())); }

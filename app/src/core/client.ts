@@ -33,45 +33,7 @@ export class SigecadClient {
         redirect: "manual",
         headers: {
           Cookie: this.token,
-          Accept: "application/json, */*",
-          "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-          "User-Agent": "sigecad-notifier/0.1",
-        },
-      });
-    } catch (e) {
-      if (retries > 0) {
-        await sleep(1500 * (3 - retries));
-        return this.get<T>(path, retries - 1);
-      }
-      throw e;
-    }
-
-
-    if (res.status === 0 || (res.status >= 300 && res.status < 400)) {
-      throw new AuthError(`HTTP ${res.status} -> login`);
-    }
-    if (res.status >= 500 && retries > 0) {
-      await sleep(1500 * (3 - retries));
-      return this.get<T>(path, retries - 1);
-    }
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status} em ${path}`);
-    }
-    return (await res.json()) as T;
-  }
-
-  periodos() {
-    return this.get<Periodo[]>("/rest/periodosletivos");
-  }
-  turmas(periodId: number) {
-    return this.get<Turma[]>(`/rest/turmas?periodoLetivoID=${periodId}`);
-  }
-  notas(matriculaId: number) {
-    return this.get<Notas>(`/rest/notas?matriculaID=${matriculaId}`);
-  }
-}
-
-
+          Accept: "application/json, *
 export interface PollClient {
   periodos(): Promise<Periodo[]>;
   turmas(periodId: number): Promise<Turma[]>;

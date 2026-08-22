@@ -94,6 +94,7 @@ export function parseBridgeResponse(raw: string): BridgeResponse {
   };
 }
 
+
 export const BRIDGE_BOOTSTRAP = `
 (function () {
   if (window.__SIGECAD_BRIDGE_VERSION__ === 4 && window.__SIGECAD_REQUEST__ &&
@@ -340,13 +341,7 @@ export const BRIDGE_BOOTSTRAP = `
       if (!planPath) throw new Error("UNAVAILABLE");
       path = planPath;
     }
-    var response = await getRelative(path, "application/pdf, text/html;q=0.8, */*;q=0.2");
-    var contentType = String(response.headers.get("content-type") || "").toLowerCase();
-    if (contentType.indexOf("text/html") >= 0 || contentType.indexOf("application/xhtml") >= 0) {
-      var html = await response.text();
-      var nested = candidateFromHtml(html, request.kind === "teaching-plan" ? request.planId : null);
-      if (!nested) throw new Error("UNAVAILABLE");
-      response = await getRelative(nested, "application/pdf, */*;q=0.2");
+    var response = await getRelative(path, "application/pdf, text/html;q=0.8, **;q=0.2");
     }
     var announced = Number(response.headers.get("content-length"));
     if (Number.isFinite(announced) && announced > MAX_DOCUMENT_BYTES) throw new Error("SIZE");
@@ -411,6 +406,7 @@ export const BRIDGE_BOOTSTRAP = `
 })();
 true;
 `;
+
 
 export const CARD_BRIDGE_BOOTSTRAP = `
 (function () {
