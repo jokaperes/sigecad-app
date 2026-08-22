@@ -2,7 +2,7 @@
   "expo": {
     "name": "SIGECAD",
     "slug": "sigecad-notificador",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
     "scheme": "sigecad",
@@ -17,7 +17,14 @@
     "android": {
       "package": "br.edu.ufgd.notificador",
       "googleServicesFile": "./google-services.json",
-      "permissions": ["POST_NOTIFICATIONS"]
+      "allowBackup": false,
+      "permissions": [],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.POST_NOTIFICATIONS"
+      ]
     },
     "plugins": [
       "@react-native-firebase/app",
@@ -27,9 +34,13 @@
       [
         "expo-build-properties",
         {
+          "android": {
+            "usesCleartextTraffic": false
+          },
           "ios": { "useFrameworks": "static" }
         }
-      ]
+      ],
+      "./plugins/withPrivacyHardening"
     ]
   }
 }
