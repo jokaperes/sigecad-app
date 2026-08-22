@@ -12,11 +12,11 @@ const PERIODOS: Periodo[] = [
 ];
 
 // Cliente fake: devolve turmas + notas conforme o "cenário" atual (mutável).
-function fakeClient(getNotas: () => Notas): PollClient {
+function fakeClient(getNotas: () => Notas, absences = 2): PollClient {
   const turmas: Turma[] = [
     {
       id: 1, matricula_id: 99, codigo: "07008721", turma: "T1",
-      disciplina: "ANÁLISE", resultado: "MAT", faltas: 2, tem_notas: true,
+      disciplina: "ANÁLISE", resultado: "MAT", faltas: absences, tem_notas: true,
     },
   ];
   return {
@@ -66,7 +66,7 @@ await check("baseline nao reporta", async () => {
   assert(storage.dump["07008721::T1"], "baseline deveria salvar estado");
 });
 
-await check("publicacao reporta NOTA PUBLICADA", async () => {
+await check("publicacao reporta Nova nota", async () => {
   const storage = memStorage();
   const reporter = recordingReporter();
   const deps = { client: fakeClient(() => NAO_PUB), storage, reporter };
@@ -78,7 +78,7 @@ await check("publicacao reporta NOTA PUBLICADA", async () => {
   );
   assert(reporter.calls.length === 1, `esperava 1 report, veio ${reporter.calls.length}`);
   assert(
-    reporter.calls[0].events.some((e: string) => e.includes("NOTA PUBLICADA")),
+    reporter.calls[0].events.some((e: string) => e.includes("Nova nota")),
     JSON.stringify(reporter.calls[0].events),
   );
   assert(res[0].reported === true);
@@ -100,6 +100,36 @@ await check("dois devices -> MESMO stateHash (quorum funciona)", async () => {
   const shA = await shOf(PUB_ALUNO_A);
   const shB = await shOf(PUB_ALUNO_B);
   assert(shA === shB, `stateHash divergiu: A=${shA} B=${shB}`);
+});
+
+await check("correção de valor já publicado não sai do aparelho", async () => {
+  const storage = memStorage();
+  const reporter = recordingReporter();
+  await runSentinelCycle(
+    { client: fakeClient(() => PUB_ALUNO_A), storage, reporter },
+    ["07008721::T1"],
+  );
+  const result = await runSentinelCycle(
+    { client: fakeClient(() => PUB_ALUNO_B), storage, reporter },
+    ["07008721::T1"],
+  );
+  assert(reporter.calls.length === 0, "valor individual não pode virar report coletivo");
+  assert(result.length === 0, "correção individual não pode virar evento coletivo");
+});
+
+await check("falta individual não entra no report coletivo", async () => {
+  const storage = memStorage();
+  const reporter = recordingReporter();
+  await runSentinelCycle(
+    { client: fakeClient(() => PUB_ALUNO_A, 2), storage, reporter },
+    ["07008721::T1"],
+  );
+  const result = await runSentinelCycle(
+    { client: fakeClient(() => PUB_ALUNO_A, 3), storage, reporter },
+    ["07008721::T1"],
+  );
+  assert(reporter.calls.length === 0, "falta pessoal não pode sair do aparelho");
+  assert(result.length === 0, "falta pessoal não pode virar evento coletivo");
 });
 
 await check("sem cutucar turma especifica -> descobre todas", async () => {
@@ -134,7 +164,7 @@ await check("falha ao reportar nao avanca estado local", async () => {
   assert(JSON.stringify(storage.dump["07008721::T1"]) === before, "estado avançou e perderia o retry");
 });
 
-console.log(`\n${5 - fails}/5 passaram`);
+console.log(`\n${7 - fails}/7 passaram`);
 process.exit(fails ? 1 : 0);
 }
 

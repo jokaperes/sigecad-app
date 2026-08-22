@@ -12,9 +12,10 @@ export function parsePeriodos(value: unknown): Periodo[] {
     const id = positiveInteger(item.id, "ID do período");
     const fallbackName = [item.ano, item.semestre].filter(isPrimitive).join("/");
     const name = item.nome ?? item.descricao ?? (fallbackName || `Período ${id}`);
+    const parsedName = shortString(name, "nome do período");
     return {
       id,
-      nome: shortString(name, "nome do período"),
+      nome: parsedName.replace(/^((?:19|20)\d{2})\s*[-/]\s*([12])$/, "$1/$2"),
       data_inicio: optionalDate(item.data_inicio),
       data_fim: optionalDate(item.data_fim),
     };
@@ -36,6 +37,7 @@ export function parseTurmas(value: unknown): Turma[] {
       resultado: nullableString(item.resultado, "resultado"),
       faltas: nullableNumber(item.faltas, "faltas"),
       limite_faltas: nullableNumber(item.limite_faltas, "limite de faltas"),
+      ch_total: nullableNumber(item.ch_total, "carga horária"),
       tem_notas: hasGrades,
     };
   });
@@ -45,6 +47,10 @@ export function parseNotas(value: unknown): Notas {
   const root = object(value, "resposta de notas");
   const rows = limitedArray(root.notas ?? [], 100, "avaliações");
   return {
+    media_aprovacao: nullableScalar(root.media_aprovacao, "média de aprovação"),
+    nota_fechada: root.nota_fechada === true || root.nota_fechada === 1,
+    formula: nullableString(root.formula, "fórmula"),
+    nota_final: nullableScalar(root.nota_final, "nota final"),
     notas: rows.map((row, index) => {
       const item = object(row, `avaliação ${index + 1}`);
       const rawValue = item.valor;
@@ -64,6 +70,15 @@ export function parseNotas(value: unknown): Notas {
       };
     }),
   };
+}
+
+function nullableScalar(value: unknown, label: string): number | string | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new DataValidationError(`${label} inválido.`);
+    return value;
+  }
+  return shortString(value, label);
 }
 
 function limitedArray(value: unknown, max: number, label: string): unknown[] {

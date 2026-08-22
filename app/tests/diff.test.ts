@@ -50,7 +50,7 @@ check("nota_publicada", () => {
   const old: Items = { "07008721::P1::A1": item("x", 0) };
   const next: Items = { "07008721::P1::A1": item("y", 1) };
   const ev = diff(old, next, LABELS);
-  assert(ev.some((e) => e.includes("NOTA PUBLICADA")), JSON.stringify(ev));
+  assert(ev.some((e) => e.includes("Nova nota")), JSON.stringify(ev));
 });
 
 check("nota_alterada_ja_publicada", () => {
@@ -95,7 +95,7 @@ check("sentinela_detecta_publicacao", () => {
   const { items: sub0, labels: lab0 } = turmaGradeItems(antes, labels, "07008721::T1");
   const { items: sub1 } = turmaGradeItems(depois, labels, "07008721::T1");
   const ev = diff(sub0, sub1, lab0);
-  assert(ev.some((e) => e.includes("NOTA PUBLICADA")), JSON.stringify(ev));
+  assert(ev.some((e) => e.includes("Nova nota")), JSON.stringify(ev));
 });
 
 check("hash_nao_expoe_valor", () => {

@@ -118,6 +118,9 @@ await check("App de produção não monta sentinela Firebase", () => {
   assert(app.includes("ExpoGoApp"));
   assert(!app.includes("NativeApp"));
   assert(!app.includes("@react-native-firebase"));
+  assert(!app.includes("wipeAcademicPersistence"));
+  assert(!app.includes("clearToken"));
+  assert(!app.includes("useEffect"));
   assert(!SENTINEL_ENABLED);
 });
 

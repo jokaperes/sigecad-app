@@ -20,6 +20,7 @@ export interface Turma {
   resultado: string | null;
   faltas: number | null;
   limite_faltas?: number | null;
+  ch_total?: number | null;
   tem_notas: boolean;
 }
 
@@ -31,5 +32,9 @@ export interface Avaliacao {
 }
 
 export interface Notas {
+  media_aprovacao?: number | string | null;
+  nota_fechada?: boolean;
+  formula?: string | null;
+  nota_final?: number | string | null;
   notas: Avaliacao[];
 }

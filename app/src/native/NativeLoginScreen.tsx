@@ -1,40 +1,22 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { WebView, type WebViewNavigation } from "react-native-webview";
-import CookieManager from "@preeternal/react-native-cookie-manager";
-import { saveToken } from "../auth/token";
+import { WebView } from "react-native-webview";
 import { Brand, Notice } from "../ui/components";
 import { colors, radius, spacing } from "../ui/theme";
+import {
+  CAS_ORIGIN,
+  SIGECAD_ORIGIN,
+  WEBVIEW_ORIGIN_WHITELIST,
+  isAllowedSessionUrl,
+} from "../expo-go/origins";
 
 const CAS_URL =
-  "https://login.app.ufgd.edu.br/?service=" +
-  encodeURIComponent("https://sigecad-academico.app.ufgd.edu.br/");
-const SIGECAD_HOST = "https://sigecad-academico.app.ufgd.edu.br";
+  `${CAS_ORIGIN}/?service=` +
+  encodeURIComponent(`${SIGECAD_ORIGIN}/`);
 
-/**
- * Login CAS inside the official UFGD page. The app never reads the password;
- * after the redirect it stores only UFGDNET in the device keychain.
- */
-export function NativeLoginScreen({ onDone }: { onDone: () => void }) {
-  const completed = useRef(false);
+export function NativeLoginScreen({ onDone: _onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
-
-  async function onNav(nav: WebViewNavigation) {
-    if (completed.current || !nav.url.startsWith(SIGECAD_HOST)) return;
-    try {
-      const cookies = await CookieManager.get(SIGECAD_HOST, true);
-      const rootCookies = await CookieManager.get("https://ufgd.edu.br", true);
-      const ufgdnet = cookies.UFGDNET?.value ?? rootCookies.UFGDNET?.value;
-      if (!ufgdnet) return;
-      completed.current = true;
-      await saveToken(`UFGDNET=${ufgdnet}`);
-      onDone();
-    } catch {
-      completed.current = false;
-      setError("O login terminou, mas não foi possível proteger a sessão neste aparelho.");
-    }
-  }
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -47,11 +29,20 @@ export function NativeLoginScreen({ onDone }: { onDone: () => void }) {
       <View style={styles.browser}>
         <WebView
           source={{ uri: CAS_URL }}
-          onNavigationStateChange={(nav) => { void onNav(nav); }}
           onError={() => setError("Não foi possível abrir o login da UFGD. Verifique sua conexão.")}
-          sharedCookiesEnabled
-          thirdPartyCookiesEnabled
-          incognito={false}
+          incognito
+          cacheEnabled={false}
+          sharedCookiesEnabled={false}
+          thirdPartyCookiesEnabled={false}
+          webviewDebuggingEnabled={false}
+          originWhitelist={[...WEBVIEW_ORIGIN_WHITELIST]}
+          mixedContentMode="never"
+          allowFileAccess={false}
+          allowFileAccessFromFileURLs={false}
+          allowUniversalAccessFromFileURLs={false}
+          setSupportMultipleWindows={false}
+          javaScriptCanOpenWindowsAutomatically={false}
+          geolocationEnabled={false}
           startInLoadingState
           renderLoading={() => (
             <View style={styles.loading}>
@@ -59,17 +50,10 @@ export function NativeLoginScreen({ onDone }: { onDone: () => void }) {
               <Text style={styles.loadingText}>Abrindo login seguro…</Text>
             </View>
           )}
-          onShouldStartLoadWithRequest={({ url }) => {
-            try {
-              const host = new URL(url).hostname;
-              return host === "ufgd.edu.br" || host.endsWith(".ufgd.edu.br");
-            } catch {
-              return false;
-            }
-          }}
+          onShouldStartLoadWithRequest={({ url }) => isAllowedSessionUrl(url)}
         />
       </View>
-      <Text style={styles.footer}>Domínios permitidos: somente ufgd.edu.br</Text>
+      <Text style={styles.footer}>Domínios permitidos: login, SIGECAD e cartão da UFGD</Text>
     </SafeAreaView>
   );
 }

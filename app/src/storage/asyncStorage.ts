@@ -1,9 +1,24 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { Items, Labels } from "../core/types";
+import type { Items } from "../core/types";
 import type { CycleStorage, TurmaState } from "../sentinel/cycle";
 
 const REGISTRATION_KEY = "app:registration:v1";
 const PREVIEW_STATE_KEY = "app:expo-go-preview:v1";
+const LEGACY_DESIGN_PREFERENCES_KEY = "app:design-preferences:v2";
+// v3 preserves theme/Home from v2 and selects Bars as the requested default once.
+const DESIGN_PREFERENCES_KEY = "app:design-preferences:v3";
+
+export interface DesignPreferences {
+  theme: "system" | "light" | "dark";
+  home: "cards" | "dense" | "agenda";
+  absences: "bars" | "alerts";
+}
+
+export const DEFAULT_DESIGN_PREFERENCES: DesignPreferences = {
+  theme: "system",
+  home: "cards",
+  absences: "bars",
+};
 
 export interface Registration {
   turmas: string[];
@@ -11,10 +26,9 @@ export interface Registration {
   registeredAt: string;
 }
 
-/** Expo Go persists only one-way hashes and human-readable assessment labels. */
 export interface PreviewState {
+  version: 2;
   items: Items;
-  labels: Labels;
   checkedAt: string;
 }
 
@@ -58,10 +72,10 @@ export async function getPreviewState(): Promise<PreviewState | null> {
   if (!raw) return null;
   try {
     const value = JSON.parse(raw) as Partial<PreviewState>;
-    if (!isItems(value.items) || !isLabels(value.labels) || typeof value.checkedAt !== "string") {
+    if (value.version !== 2 || !isItems(value.items) || typeof value.checkedAt !== "string" || "labels" in value) {
       throw new Error("invalid preview state");
     }
-    return { items: value.items, labels: value.labels, checkedAt: value.checkedAt };
+    return { version: 2, items: value.items, checkedAt: value.checkedAt };
   } catch {
     await AsyncStorage.removeItem(PREVIEW_STATE_KEY);
     return null;
@@ -69,11 +83,48 @@ export async function getPreviewState(): Promise<PreviewState | null> {
 }
 
 export async function savePreviewState(value: PreviewState): Promise<void> {
+  if (value && "labels" in value) {
+    await AsyncStorage.removeItem(PREVIEW_STATE_KEY);
+    return;
+  }
   await AsyncStorage.setItem(PREVIEW_STATE_KEY, JSON.stringify(value));
 }
 
 export async function clearPreviewState(): Promise<void> {
   await AsyncStorage.removeItem(PREVIEW_STATE_KEY);
+}
+
+export async function wipeAcademicPersistence(): Promise<void> {
+  const keys = await AsyncStorage.getAllKeys();
+  const owned = keys.filter((key) =>
+    key === REGISTRATION_KEY ||
+    key === PREVIEW_STATE_KEY ||
+    key.startsWith("turma:")
+  );
+  if (owned.length) await AsyncStorage.multiRemove(owned);
+}
+
+export async function getDesignPreferences(): Promise<DesignPreferences> {
+  const current = await AsyncStorage.getItem(DESIGN_PREFERENCES_KEY);
+  const legacy = current ? null : await AsyncStorage.getItem(LEGACY_DESIGN_PREFERENCES_KEY);
+  const raw = current ?? legacy;
+  if (!raw) return DEFAULT_DESIGN_PREFERENCES;
+  try {
+    const value = JSON.parse(raw) as Partial<DesignPreferences>;
+    const preferences: DesignPreferences = {
+      theme: value.theme === "light" || value.theme === "dark" ? value.theme : "system",
+      home: value.home === "dense" || value.home === "agenda" ? value.home : "cards",
+      absences: legacy ? "bars" : value.absences === "alerts" ? "alerts" : "bars",
+    };
+    if (legacy) await saveDesignPreferences(preferences);
+    return preferences;
+  } catch {
+    return DEFAULT_DESIGN_PREFERENCES;
+  }
+}
+
+export async function saveDesignPreferences(value: DesignPreferences): Promise<void> {
+  await AsyncStorage.setItem(DESIGN_PREFERENCES_KEY, JSON.stringify(value));
 }
 
 /** Removes registration metadata and hash-only snapshots from this device. */
@@ -95,7 +146,4 @@ function isItems(value: unknown): value is Items {
   });
 }
 
-function isLabels(value: unknown): value is Labels {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  return Object.values(value).every((label) => typeof label === "string" && label.length <= 600);
-}
+

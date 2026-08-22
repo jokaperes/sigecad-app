@@ -9,12 +9,17 @@ export interface AcademicAssessment {
 }
 
 export interface AcademicCourse {
+  enrollmentId: number;
   code: string;
   name: string;
   section: string;
   result: string | null;
   absences: number | null;
   absenceLimit: number | null;
+  totalHours: number | null;
+  approvalAverage: number | string | null;
+  finalGrade: number | string | null;
+  formula: string | null;
   assessments: AcademicAssessment[];
 }
 
@@ -47,6 +52,14 @@ export async function loadAcademicOverview(
     noteRequestIndex += 1;
   }
 
+  return buildAcademicOverview(period, turmas, notesByEnrollment);
+}
+
+export function buildAcademicOverview(
+  period: Periodo,
+  turmas: Turma[],
+  notesByEnrollment: Record<number, Notas>,
+): AcademicOverview {
   const { items, labels } = buildSnapshot(turmas, notesByEnrollment);
   return {
     period,
@@ -63,12 +76,17 @@ function toAcademicCourse(
 ): AcademicCourse {
   const notes = notesByEnrollment[course.matricula_id]?.notas ?? [];
   return {
+    enrollmentId: course.matricula_id,
     code: course.codigo,
     name: course.disciplina,
     section: course.turma,
     result: course.resultado,
     absences: course.faltas,
     absenceLimit: course.limite_faltas ?? null,
+    totalHours: course.ch_total ?? null,
+    approvalAverage: notesByEnrollment[course.matricula_id]?.media_aprovacao ?? null,
+    finalGrade: notesByEnrollment[course.matricula_id]?.nota_final ?? null,
+    formula: notesByEnrollment[course.matricula_id]?.formula ?? null,
     assessments: notes.map((assessment) => ({
       name: assessment.nome,
       value: assessment.valor,

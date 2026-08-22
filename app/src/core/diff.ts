@@ -17,7 +17,7 @@ export function diff(old: Items, next: Items, labels: Labels): string[] {
       } else if (key.endsWith("::resultado")) {
         events.push(`Resultado alterado: ${labels[key]}`);
       } else if (!prev.publicar && cur.publicar) {
-        events.push(`NOTA PUBLICADA: ${labels[key]} saiu!`);
+        events.push(`Nova nota: ${labels[key]}`);
       } else {
         events.push(`Nota alterada: ${labels[key]}`);
       }

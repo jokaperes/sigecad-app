@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import auth from "@react-native-firebase/auth";
 import messaging from "@react-native-firebase/messaging";
+import { SENTINEL_ENABLED } from "./sentinelFlag";
 import { setupBackgroundHandler } from "../push/handlers";
 import { initAppCheck } from "../backend/firebase";
 import { clearToken, getToken } from "../auth/token";
@@ -34,12 +35,18 @@ import {
 } from "../ui/components";
 import { colors, radius, spacing } from "../ui/theme";
 
-// Silent-push handlers must be registered before React mounts.
-setupBackgroundHandler();
+if (SENTINEL_ENABLED) setupBackgroundHandler();
 
 type Stage = "loading" | "login" | "consent" | "registering" | "done" | "refreshing" | "deleting";
 
 export default function App() {
+  if (!SENTINEL_ENABLED) {
+    throw new Error("O sentinela Firebase está desativado neste build.");
+  }
+  return <SentinelApp />;
+}
+
+function SentinelApp() {
   const [stage, setStage] = useState<Stage>("loading");
   const [email, setEmail] = useState("");
   const [consent, setConsent] = useState(false);
@@ -66,6 +73,17 @@ export default function App() {
   useEffect(() => {
     if (!registration) return undefined;
     return messaging().onTokenRefresh(() => { void enroll(true); });
+  }, [registration?.registeredAt]);
+
+  useEffect(() => {
+    if (!registration) return undefined;
+    return messaging().onMessage((message) => {
+      if (message.data?.kind !== "grade-update") return;
+      Alert.alert(
+        message.notification?.title ?? "Atualização acadêmica",
+        message.notification?.body ?? "Há uma atualização nas suas turmas.",
+      );
+    });
   }, [registration?.registeredAt]);
 
   async function enroll(refresh = false) {
@@ -141,8 +159,9 @@ export default function App() {
               <Eyebrow>Último passo</Eyebrow>
               <Text style={styles.heroTitle}>Receba o aviso. Guarde a privacidade.</Text>
               <Text style={styles.body}>
-                Seu token fica no aparelho. O servidor recebe apenas seu contato opcional,
-                turmas, hashes opacos e os eventos necessários para enviar o alerta.
+                Seu acesso UFGD fica somente no aparelho. O servidor recebe o token de push,
+                seu contato opcional, códigos de turma, hashes e rótulos dos eventos — nunca
+                sua senha nem o valor das notas.
               </Text>
             </View>
             <Card>
@@ -181,7 +200,7 @@ export default function App() {
                 onPress={() => void enroll()}
               />
             </Card>
-            <Text style={styles.footnote}>Somente leitura • Sem senha no servidor • Exclusão dentro do app</Text>
+            <Text style={styles.footnote}>Somente leitura • Credencial UFGD só no aparelho • Exclusão dentro do app</Text>
           </Screen>
         </KeyboardAvoidingView>
       </AppFrame>
@@ -197,10 +216,10 @@ export default function App() {
         <View style={styles.hero}>
           <View style={styles.statusPill}>
             <View style={styles.statusDot} />
-            <Text style={styles.statusText}>Monitoramento ativo</Text>
+            <Text style={styles.statusText}>Alertas cadastrados</Text>
           </View>
-          <Text style={styles.heroTitle}>Você não precisa ficar atualizando o portal.</Text>
-          <Text style={styles.body}>Quando uma avaliação for publicada, o alerta chega por push.</Text>
+          <Text style={styles.heroTitle}>Avisos das suas turmas</Text>
+          <Text style={styles.body}>O app pode avisar quando uma avaliação aparece ou uma nota é publicada.</Text>
         </View>
         <View style={styles.metrics}>
           <Card style={styles.metricCard}>
@@ -209,14 +228,14 @@ export default function App() {
           </Card>
           <Card style={styles.metricCard}>
             <Text style={styles.metricValue}>6×</Text>
-            <Text style={styles.metricLabel}>checagens por dia</Text>
+            <Text style={styles.metricLabel}>horários de verificação</Text>
           </Card>
         </View>
         <Card>
           <Text style={styles.sectionTitle}>Seu dispositivo</Text>
-          <InfoRow label="Última sincronização" value={lastUpdated} />
-          <InfoRow label="Dados acadêmicos no servidor" value="Nenhum" />
-          <InfoRow label="Token UFGD" value="Somente neste aparelho" />
+          <InfoRow label="Último cadastro" value={lastUpdated} />
+          <InfoRow label="Servidor" value="Push, turmas, hashes e rótulos" />
+          <InfoRow label="Credencial UFGD" value="Somente neste aparelho" />
           {error ? <Notice danger>{error}</Notice> : null}
           <SecondaryButton
             label="Sincronizar turmas agora"
@@ -224,6 +243,7 @@ export default function App() {
             onPress={() => void enroll(true)}
           />
         </Card>
+        <Notice>O iOS pode atrasar verificações em segundo plano e deixa de executá-las se o app for encerrado à força.</Notice>
         {registration?.turmas.length ? (
           <Card>
             <Text style={styles.sectionTitle}>Turmas protegidas</Text>
@@ -238,7 +258,7 @@ export default function App() {
         )}
         <Card style={styles.dangerCard}>
           <Text style={styles.sectionTitle}>Privacidade e saída</Text>
-          <Text style={styles.body}>Remove seu cadastro, vínculo com turmas, reports, token local e snapshots.</Text>
+          <Text style={styles.body}>Remove o push, os vínculos de turma e os dados locais deste aparelho.</Text>
           <PrimaryButton
             label="Apagar meus dados e sair"
             danger

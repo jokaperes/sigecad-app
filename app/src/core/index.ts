@@ -1,6 +1,7 @@
 export * from "./types";
 export { pyStr, h } from "./hash";
-export { sha256hex } from "./sha256";
+export { sha256hex, hmacSha256hex, parseHmacKeyHex } from "./sha256";
+export { randomHmacKeyHex } from "./hmac";
 export {
   turmaCode,
   buildSnapshot,
