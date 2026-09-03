@@ -64,7 +64,11 @@ def run_once():
             print(f"  user {u['id']}: baseline ({len(items)} itens)")
         elif events:
             print(f"  user {u['id']}: {len(events)} mudanca(s) -> notificando")
-            notifier.send_email(u["email"], "📚 Novidade nas suas notas (UFGD)", events)
+            notifier.send_email(
+                u["email"],
+                "Atualização acadêmica",
+                ["Há uma atualização na sua conta UFGD. Consulte os detalhes no seu aparelho."],
+            )
         else:
             print(f"  user {u['id']}: sem mudanca")
         store.save_snapshot(u["id"], items)
@@ -108,11 +112,16 @@ def run_sentinel_once():
                 emails = store.turma_member_emails(tc)
                 print(f"  turma {tc}: {len(events)} mudanca(s) -> fan-out p/ {len(emails)} aluno(s)")
                 for em in emails:
-                    notifier.send_email(em, "📚 Saiu novidade na sua turma (UFGD)", events)
+                    notifier.send_email(
+                        em,
+                        "Atualização acadêmica",
+                        ["Há uma atualização na sua conta UFGD. Consulte os detalhes no seu aparelho."],
+                    )
             store.save_turma_snapshot(tc, sub)
 
 
 def main():
+    print("MODO CENTRAL: este processo decifra tokens UFGDNET em memória e não é zero-knowledge.")
     store.init_db()
     sentinel = "--sentinel" in sys.argv
     runner = run_sentinel_once if sentinel else run_once

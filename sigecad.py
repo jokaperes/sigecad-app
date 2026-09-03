@@ -15,11 +15,13 @@ O token vem do ambiente, nunca hardcoded/commitado.
 import argparse
 import gzip
 import hashlib
+import hmac
 import html
 import json
 import os
 import random
 import re
+import secrets
 import ssl
 import sys
 import tempfile
@@ -271,8 +273,68 @@ def current_period(client):
 
 
 def _h(v):
-    """Hash curto (nao guarda o valor real da nota, so um digest pra detectar mudanca)."""
     return hashlib.sha256(str(v).encode()).hexdigest()[:16]
+
+
+def _hmac_key_path(state_path=None):
+    directory = os.path.dirname(os.path.abspath(state_path or STATE_FILE))
+    return os.path.join(directory, ".hmac-key")
+
+
+def _hmac_key(state_path=None):
+    path = _hmac_key_path(state_path)
+    if os.path.exists(path):
+        with open(path, "rb") as handle:
+            key = handle.read().strip()
+        if len(key) >= 32:
+            return key
+    key = secrets.token_bytes(32)
+    directory = os.path.dirname(os.path.abspath(path))
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".hmac-", dir=directory)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(key)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+        os.chmod(path, 0o600)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
+    return key
+
+
+def _seal_items(items, key=None, state_path=None):
+    secret = key if key is not None else _hmac_key(state_path)
+    sealed = {}
+    for name, item in items.items():
+        sealed_name = hmac.new(secret, f"k|{name}".encode(), hashlib.sha256).hexdigest()
+        publicar = item.get("publicar")
+        sealed[sealed_name] = {
+            "hash": hmac.new(secret, f"v|{item['hash']}|{publicar}".encode(), hashlib.sha256).hexdigest(),
+            "publicar": publicar,
+        }
+    return sealed
+
+
+def diff_sealed(old_sealed, items, labels, key=None, state_path=None):
+    secret = key if key is not None else _hmac_key(state_path)
+    previous = old_sealed or {}
+    comparable_old = {}
+    comparable_new = _seal_items(items, secret)
+    remapped_new = {}
+    remapped_old = {}
+    for name, item in items.items():
+        sealed_name = hmac.new(secret, f"k|{name}".encode(), hashlib.sha256).hexdigest()
+        remapped_new[name] = comparable_new[sealed_name]
+        if sealed_name in previous:
+            remapped_old[name] = previous[sealed_name]
+    return diff(remapped_old, remapped_new, labels)
 
 
 def turma_code(t):
@@ -404,15 +466,21 @@ def diff(old, new, labels):
 def load_state(path=STATE_FILE):
     if os.path.exists(path):
         with open(path) as f:
-            return json.load(f)
+            data = json.load(f)
+        if data.get("v") != 2 or "labels" in data:
+            return None
+        return data
     return None
 
 
-def save_state(items, labels, path=STATE_FILE):
+def save_state(items, labels=None, path=STATE_FILE, key=None):
     directory = os.path.dirname(os.path.abspath(path))
     os.makedirs(directory, exist_ok=True)
-    payload = {"at": datetime.now().isoformat(timespec="seconds"),
-               "items": items, "labels": labels}
+    payload = {
+        "v": 2,
+        "at": datetime.now().isoformat(timespec="seconds"),
+        "items": _seal_items(items, key, path),
+    }
     fd, tmp = tempfile.mkstemp(prefix=".state-", suffix=".json", dir=directory)
     try:
         os.fchmod(fd, 0o600)
@@ -421,6 +489,7 @@ def save_state(items, labels, path=STATE_FILE):
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, path)
+        os.chmod(path, 0o600)
     except Exception:
         try:
             os.unlink(tmp)
@@ -507,8 +576,7 @@ def main(argv=None):
         sys.exit(f"[SIGECAD] {e}.")
 
     old = load_state()
-    old_items = (old or {}).get("items", {})
-    events = diff(old_items, items, labels)
+    events = diff_sealed((old or {}).get("items", {}), items, labels)
     stamp = datetime.now().strftime("%H:%M:%S")
     if old is None:
         print(f"[{stamp}] snapshot inicial salvo ({len(items)} itens). Sem baseline ainda.")
@@ -519,7 +587,7 @@ def main(argv=None):
     else:
         print(f"[{stamp}] nenhuma mudanca ({len(items)} itens).")
 
-    save_state(items, labels)
+    save_state(items)
 
 
 if __name__ == "__main__":

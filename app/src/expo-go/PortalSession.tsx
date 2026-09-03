@@ -12,7 +12,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   WebView,
   type WebViewMessageEvent,
-  type WebViewNavigation,
 } from "react-native-webview";
 import { Notice, SecondaryButton } from "../ui/components";
 import { colors, radius, spacing } from "../ui/theme";
@@ -132,7 +131,9 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   const [phase, setPhase] = useState<SessionPhase>("login");
   const [error, setError] = useState<string | null>(null);
   const [webKey, setWebKey] = useState(0);
-  const [browserUri, setBrowserUri] = useState(SIGECAD_HOME);
+  // The CAS must be the first page in the same WebView that later hosts the
+  // academic portal. This keeps the UFGDNET cookie in the WebView's jar.
+  const [browserUri, setBrowserUri] = useState(CAS_URL);
 
   useEffect(() => {
     // Cleanup is best-effort. Delay the lazily loaded filesystem module so its
@@ -365,10 +366,6 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     }
   }, [request, reopenLogin]);
 
-  function onNavigation(nav: WebViewNavigation) {
-    if (isAcademicUrl(nav.url) && phase === "login") setPhase("connecting");
-  }
-
   function markOriginReady(url: string) {
     const origin = safeHttpsOrigin(url);
     installedBridge.current = null;
@@ -585,7 +582,6 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
           pointerEvents={showContent ? "none" : "auto"}
           style={showContent ? hiddenBrowserStyle : styles.browser}
           containerStyle={showContent ? hiddenBrowserStyle : styles.browserContainer}
-          onNavigationStateChange={onNavigation}
           onLoadEnd={(event) => onLoadEnd(event.nativeEvent.url)}
           onMessage={onMessage}
           injectedJavaScriptBeforeContentLoaded={NAV_READY_SCRIPT}
@@ -710,7 +706,7 @@ const styles = StyleSheet.create({
   browser: { flex: 1, backgroundColor: colors.surface },
   // WKWebView may suspend navigation/network when reduced to 1×1 and fully
   // transparent. Keep a laid-out, non-interactive surface behind the app.
-  hiddenBrowser: { ...StyleSheet.absoluteFillObject, opacity: 0.01, zIndex: 0 },
+  hiddenBrowser: { ...StyleSheet.absoluteFill, opacity: 0.01, zIndex: 0 },
   // Android's native WebView may intercept hardware taps even with
   // pointerEvents="none". It continues bridge fetches in this tiny off-screen
   // surface, while the dashboard owns the entire interactive area.
@@ -720,7 +716,7 @@ const styles = StyleSheet.create({
   hiddenBrowserAndroid: { position: "absolute", width: 2, height: 2, left: 0, bottom: 0, opacity: 0.01, zIndex: 0 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm },
   expiredOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 2,
     backgroundColor: "rgba(23,32,28,0.25)",
     justifyContent: "flex-end",

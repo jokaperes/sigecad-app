@@ -101,7 +101,7 @@ async function fanOut(turmaCode: string, events: string[]): Promise<void> {
   for (let i = 0; i < tokens.length; i += 500) {
     const response = await getMessaging().sendEachForMulticast({
       tokens: tokens.slice(i, i + 500),
-      notification: { title: "📚 Novidade na sua turma (UFGD)", body },
+      notification: { title: "Atualização acadêmica UFGD", body },
       data: { turmaCode, kind: "grade-update" },
       apns: { payload: { aps: { sound: "default" } } },
       android: { priority: "high" },

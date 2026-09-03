@@ -53,7 +53,7 @@ export function NativeLoginScreen({ onDone: _onDone }: { onDone: () => void }) {
           onShouldStartLoadWithRequest={({ url }) => isAllowedSessionUrl(url)}
         />
       </View>
-      <Text style={styles.footer}>Domínios permitidos: login, SIGECAD e cartão da UFGD</Text>
+      <Text style={styles.footer}>Domínios permitidos: CAS, gov.br oficial, SIGECAD e cartão da UFGD</Text>
     </SafeAreaView>
   );
 }

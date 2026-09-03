@@ -15,6 +15,7 @@ Uso:
     from auth import get_token
     token = get_token("usuario", "senha")   # -> "UFGDNET=...."
 """
+import os
 import re
 import sys
 import getpass
@@ -96,8 +97,11 @@ def _cli():
         sys.exit(f"[erro] {e}")
     finally:
         del pwd  # some da memória
-    print("\nSeu token (coloque em SIGECAD_TOKEN no .env):\n")
-    print(token)
+    token_path = os.path.join(os.path.expanduser("~"), ".sigecad-token")
+    fd = os.open(token_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        handle.write(token + "\n")
+    print(f"Token gravado em {token_path} (permissão 0600). O valor não foi impresso.")
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ cp server/.env.example .env
 Preencha no `.env`:
 
 ```dotenv
-SIGECAD_TOKEN=UFGDNET=SEU_VALOR
+SIGECAD_TOKEN=UFGDNET=SEU_VALOR # gitleaks:allow (placeholder de documentação)
 NOTIFY_EMAIL=voce@example.com
 RESEND_API_KEY=
 RESEND_FROM=Notas UFGD <notas@seudominio.com>

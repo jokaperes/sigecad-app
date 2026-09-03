@@ -31,3 +31,10 @@ app/google-services.json
 app/GoogleService-Info.plist
 app/android/
 app/ios/
+
+# Assinatura local do APK (nunca commitar)
+app/*.keystore
+*.apk
+.hmac-key
+.sigecad-token
+app/android/app/build/outputs/

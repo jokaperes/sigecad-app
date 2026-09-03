@@ -13,9 +13,11 @@ import {
 import {
   CARD_ORIGIN,
   CAS_ORIGIN,
+  GOV_BR_ORIGIN,
   SESSION_ORIGINS,
   SIGECAD_ORIGIN,
   WEBDOC_ORIGIN,
+  WEBVIEW_ORIGIN_WHITELIST,
   isAllowedSessionUrl,
   isBridgeUrl,
   isLoginUrl,
@@ -76,20 +78,23 @@ await check("selagem remove rótulos e códigos de turma", () => {
   assert(Object.keys(sealed)[0]?.length === 64);
 });
 
-await check("somente origens UFGD autenticadas são permitidas", () => {
+await check("somente origens da sessão autenticada são permitidas", () => {
   assert(isAllowedSessionUrl(`${CAS_ORIGIN}/login`));
   assert(isAllowedSessionUrl(`${SIGECAD_ORIGIN}/`));
   assert(isAllowedSessionUrl(`${CARD_ORIGIN}/cartoes_usuario/visualiza_pessoa`));
+  assert(isAllowedSessionUrl(`${GOV_BR_ORIGIN}/authorize`));
   assert(!isAllowedSessionUrl("http://login.app.ufgd.edu.br/"));
   assert(!isAllowedSessionUrl("https://evil.ufgd.edu.br/"));
   assert(!isAllowedSessionUrl("https://ufgd.edu.br/"));
   assert(!isAllowedSessionUrl("https://www.ufgd.edu.br/"));
   assert(!isAllowedSessionUrl("https://sso.gov.br/"));
+  assert(!isAllowedSessionUrl("https://accounts.google.com/"));
   assert(!isAllowedSessionUrl(`${WEBDOC_ORIGIN}/gerar`));
   assert(!isBridgeUrl(`${CAS_ORIGIN}/`));
   assert(isBridgeUrl(`${SIGECAD_ORIGIN}/rest/notas`));
   assert(isLoginUrl(`${CAS_ORIGIN}/?service=x`));
-  assert(SESSION_ORIGINS.length === 3);
+  assert(SESSION_ORIGINS.length === 4);
+  assert(WEBVIEW_ORIGIN_WHITELIST.length === 1 && WEBVIEW_ORIGIN_WHITELIST[0] === "https://*");
 });
 
 await check("ponte nunca lê cookie, senha ou caminho livre", () => {

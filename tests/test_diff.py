@@ -124,9 +124,15 @@ class RobustnessTests(unittest.TestCase):
     def test_save_state_atomico_e_privado(self):
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "state.json")
-            sigecad.save_state({"x": item("hash")}, {"x": "label"}, path)
+            sigecad.save_state({"07008721::P1::A1": item("hash")}, {"07008721::P1::A1": "label"}, path)
             with open(path, encoding="utf-8") as handle:
-                self.assertIn("x", json.load(handle)["items"])
+                raw = handle.read()
+            data = json.loads(raw)
+            self.assertEqual(data["v"], 2)
+            self.assertNotIn("labels", data)
+            self.assertNotIn("label", raw)
+            self.assertNotIn("07008721", raw)
+            self.assertEqual(len(next(iter(data["items"].keys()))), 64)
             self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
 
     def test_sqlite_remove_chaves_antigas(self):
@@ -213,7 +219,7 @@ class RobustnessTests(unittest.TestCase):
                 <a href="/cartoes_usuario/visualiza_estatus/71593/ABCDEF1234">cartão</a>
             '''
             status = '''
-                <legend>Cartão: <span title="Número do cartão">2022000466 (Via 1)</span></legend>
+                <legend>Cartão: <span title="Número do cartão">1234567890 (Via 1)</span></legend>
                 <label>Nome: </label><div><span>ALUNO TESTE</span></div>
                 <label>Curso: </label><div><span>ENGENHARIA &amp; COMPUTAÇÃO</span></div>
                 <label>Ativo: </label><div><span>Sim</span></div>
@@ -234,7 +240,7 @@ class RobustnessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             photo = os.path.join(directory, "foto.jpg")
             report = sigecad.card_report(FakeCardClient(), photo)
-            self.assertEqual(report["cartao"], "2022000466")
+            self.assertEqual(report["cartao"], "1234567890")
             self.assertEqual(report["saldo_ru"], "R$ 5,80")
             self.assertEqual(report["saldo_cantina"], "R$ 4,00")
             self.assertEqual(report["curso"], "ENGENHARIA & COMPUTAÇÃO")

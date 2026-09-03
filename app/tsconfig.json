@@ -5,7 +5,8 @@
     "lib": ["ES2021", "DOM"],
     "jsx": "react-native",
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["node"]
   },
   "include": ["**/*.ts", "**/*.tsx"]
 }

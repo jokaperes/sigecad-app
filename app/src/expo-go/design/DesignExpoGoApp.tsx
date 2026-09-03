@@ -521,12 +521,12 @@ interface ScreenProps { theme: DesignTheme; styles: ReturnType<typeof createStyl
 function HomeCards({ overview, card, cardLoading, profile, portal, theme, styles, navigate }: ScreenProps & {
   overview: AcademicOverview; card: StudentCard | null; cardLoading: boolean; profile: AcademicProfile | null; portal: PortalData; navigate(route: Route): void;
 }) {
-  const activeCourses = overview.courses.filter((course) => !isFinishedCourse(course));
-  const schedule = activeScheduleEntries(portal.schedule, overview.courses);
-  const current = currentSchedule(schedule);
-  const next = nextSchedule(schedule, current);
-  const risks = [...activeCourses].filter((item) => item.absenceLimit && item.absences !== null && absenceRatio(item) >= .5)
-    .sort((a, b) => absenceRatio(b) - absenceRatio(a)).slice(0, 2);
+  const activeCourses = useMemo(() => overview.courses.filter((course) => !isFinishedCourse(course)), [overview.courses]);
+  const schedule = useMemo(() => activeScheduleEntries(portal.schedule, overview.courses), [portal.schedule, overview.courses]);
+  const current = useMemo(() => currentSchedule(schedule), [schedule]);
+  const next = useMemo(() => nextSchedule(schedule, current), [schedule, current]);
+  const risks = useMemo(() => [...activeCourses].filter((item) => item.absenceLimit && item.absences !== null && absenceRatio(item) >= .5)
+    .sort((a, b) => absenceRatio(b) - absenceRatio(a)).slice(0, 2), [activeCourses]);
   const name = firstName(profile?.name ?? card?.name);
   const featured = current ?? next;
   const featuredRoom = formatScheduleRoom(featured?.room);
@@ -713,7 +713,8 @@ function AbsencesScreen({ overview, portal, loading, variant, onVariantChange, t
 function ScheduleScreen({ period, entries, courses, theme, styles }: ScreenProps & { period: string; entries: ScheduleEntry[]; courses: AcademicCourse[] }) {
   const today = new Date().getDay();
   const [day, setDay] = useState(today >= 1 && today <= 5 ? today : 1);
-  const filtered = activeScheduleEntries(entries, courses).filter((entry) => entry.day === day);
+  const activeEntries = useMemo(() => activeScheduleEntries(entries, courses), [entries, courses]);
+  const filtered = useMemo(() => activeEntries.filter((entry) => entry.day === day), [activeEntries, day]);
   return (
     <View style={styles.page}>
       <View style={styles.rowBetween}><TitleBlock title="Horários" subtitle={period} styles={styles} /><CalendarDays size={23} color={theme.primary} /></View>
@@ -747,7 +748,10 @@ function CardScreen({ card, error, request, onCardUpdate, theme, styles }: Scree
     setPageError(null);
     setPhotoError(null);
   }, [card]);
-  const transactions = source === "ru" ? visibleCard?.ruTransactions ?? [] : visibleCard?.canteenTransactions ?? [];
+  const transactions = useMemo(
+    () => (source === "ru" ? visibleCard?.ruTransactions ?? [] : visibleCard?.canteenTransactions ?? []),
+    [source, visibleCard?.ruTransactions, visibleCard?.canteenTransactions],
+  );
 
   async function loadMore() {
     if (loadingMore || !canLoadMore) return;
@@ -1109,7 +1113,7 @@ function DiagnosticsScreen({ overview, card, portal, cardUnavailable, detailsLoa
 }
 
 function HistoryScreen({ portal, loading, theme, styles, back }: ScreenProps & { portal: PortalData; loading: boolean; back(): void }) {
-  const groups = groupHistory(portal.history);
+  const groups = useMemo(() => groupHistory(portal.history), [portal.history]);
   return (
     <View style={styles.page}>
       <BackHeader label="Perfil" onPress={back} theme={theme} styles={styles} />
@@ -1122,7 +1126,7 @@ function HistoryScreen({ portal, loading, theme, styles, back }: ScreenProps & {
 }
 
 function CurriculumScreen({ portal, loading, theme, styles, back }: ScreenProps & { portal: PortalData; loading: boolean; back(): void }) {
-  const semesters = chunk(portal.curriculum, 6);
+  const semesters = useMemo(() => chunk(portal.curriculum, 6), [portal.curriculum]);
   return (
     <View style={styles.page}>
       <BackHeader label="Perfil" onPress={back} theme={theme} styles={styles} />

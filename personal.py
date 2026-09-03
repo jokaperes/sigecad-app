@@ -36,8 +36,7 @@ def run_once():
         sys.exit("[AUTH] token expirado/inválido. Pegue um UFGDNET novo no navegador.")
 
     old = sigecad.load_state()
-    old_items = (old or {}).get("items", {})
-    events = sigecad.diff(old_items, items, labels)
+    events = sigecad.diff_sealed((old or {}).get("items", {}), items, labels)
     if old is None:
         print(f"baseline salvo ({len(items)} itens).")
     elif events:
@@ -46,11 +45,15 @@ def run_once():
             print("  -", e)
         dest = os.environ.get("NOTIFY_EMAIL")
         if dest:
-            notifier.send_email(dest, "📚 Novidade nas suas notas (UFGD)", events)
+            notifier.send_email(
+                dest,
+                "Atualização acadêmica",
+                ["Há uma atualização na sua conta UFGD. Consulte os detalhes no seu aparelho."],
+            )
     else:
         print("sem mudança.")
 
-    sigecad.save_state(items, labels)
+    sigecad.save_state(items)
 
 
 def main():

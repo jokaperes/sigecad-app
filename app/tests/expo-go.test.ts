@@ -100,7 +100,7 @@ await check("dashboard fica acima da WebView oculta no Android", () => {
   const source = readFileSync(portalSessionSourcePath, "utf8");
   assert(source.includes('<View style={styles.contentLayer}>{children}</View>'));
   assert(source.includes('contentLayer: { flex: 1, position: "relative", zIndex: 1 }'));
-  assert(source.includes('hiddenBrowser: { ...StyleSheet.absoluteFillObject, opacity: 0.01, zIndex: 0 }'));
+  assert(source.includes('hiddenBrowser: { ...StyleSheet.absoluteFill, opacity: 0.01, zIndex: 0 }'));
   assert(source.includes('Platform.OS === "android"'));
   assert(source.includes('hiddenBrowserAndroid: { position: "absolute", width: 2, height: 2, left: 0'));
   assert(source.includes('bottom: 0, opacity: 0.01, zIndex: 0'));
@@ -119,6 +119,15 @@ await check("ponte recarrega a mesma origem após restauração", () => {
   const source = readFileSync(portalSessionSourcePath, "utf8");
   assert(source.includes('if (browserUri === destination) webView.current?.reload()'));
   assert(source.includes('}, [browserUri]);'));
+});
+
+await check("login começa no CAS e só conecta depois do SIGECAD", () => {
+  const source = readFileSync(portalSessionSourcePath, "utf8");
+  assert(source.includes("const [browserUri, setBrowserUri] = useState(CAS_URL);"));
+  assert(!source.includes("const [browserUri, setBrowserUri] = useState(SIGECAD_HOME);"));
+  assert(!source.includes("function onNavigation"));
+  assert(!source.includes("onNavigationStateChange={onNavigation}"));
+  assert(source.includes('if (isAcademicUrl(url) && (phase === "login" || phase === "connecting")) void connect();'));
 });
 
 await check("sessão reutiliza períodos e instala cada bridge uma vez por página", () => {
