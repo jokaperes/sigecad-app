@@ -172,4 +172,4 @@ Mapas, identidade e operação: [API-MAP.md](API-MAP.md), [ROUTES.md](ROUTES.md)
 - O token é bearer: quem o possui acessa a conta. Revogue/troque se for exposto.
 - Relate falhas à UFGD; não teste IDs, hashes ou contas de outras pessoas.
 
-Licença MIT. Veja [LICENSE](LICENSE).
+Software proprietário. Todos os direitos reservados. Veja [LICENSE](LICENSE).

@@ -1,6 +1,7 @@
 {
   "name": "sigecad-functions",
   "description": "Backend device-sentinela do Notificador de Notas UFGD",
+  "license": "UNLICENSED",
   "private": true,
   "engines": {
     "node": "22"

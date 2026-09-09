@@ -1,6 +1,7 @@
 {
   "name": "sigecad-app",
   "version": "0.2.0",
+  "license": "UNLICENSED",
   "private": true,
   "main": "index.ts",
   "scripts": {
