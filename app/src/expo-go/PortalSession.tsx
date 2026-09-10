@@ -12,7 +12,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   WebView,
   type WebViewMessageEvent,
-  type WebViewNavigation,
 } from "react-native-webview";
 import { Notice, SecondaryButton } from "../ui/components";
 import { colors, radius, spacing } from "../ui/theme";
@@ -32,10 +31,11 @@ import {
   SIGECAD_ORIGIN,
   WEBDOC_ORIGIN,
   WEBVIEW_ORIGIN_WHITELIST,
-  isAcademicUrl,
   isAllowedSessionUrl,
   isBridgeUrl,
   isLoginUrl,
+  isStableAcademicUrl,
+  hasCasServiceTicket,
   safeHttpsOrigin,
 } from "./origins";
 import type { PortalBatchItem, PortalBatchRequest } from "./client";
@@ -127,14 +127,21 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   const operationQueue = useRef<Promise<void>>(Promise.resolve());
   const requestCounter = useRef(0);
   const connecting = useRef(false);
+  const connectAttempt = useRef(0);
+  const connectRetries = useRef(0);
+  const ticketSettle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const periodCache = useRef<{ value: unknown; cachedAt: number } | null>(null);
   const installedBridge = useRef<string | null>(null);
   const [phase, setPhase] = useState<SessionPhase>("login");
   const [error, setError] = useState<string | null>(null);
   const [webKey, setWebKey] = useState(0);
-  const [browserUri, setBrowserUri] = useState(SIGECAD_HOME);
+  // The CAS must be the first page in the same WebView that later hosts the
+  // academic portal. This keeps the UFGDNET cookie in the WebView's jar.
+  const [browserUri, setBrowserUri] = useState(CAS_URL);
 
   useEffect(() => {
+    // Cleanup is best-effort. Delay the lazily loaded filesystem module so its
+    // parse/evaluation cannot compete with login or the first Home paint.
     const timer = setTimeout(() => { void cleanupAcademicDocumentCache(); }, 10_000);
     return () => clearTimeout(timer);
   }, []);
@@ -162,6 +169,12 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     currentOrigin.current = null;
     operationQueue.current = Promise.resolve();
     connecting.current = false;
+    connectAttempt.current += 1;
+    connectRetries.current = 0;
+    if (ticketSettle.current) {
+      clearTimeout(ticketSettle.current);
+      ticketSettle.current = null;
+    }
     requestCounter.current = 0;
     periodCache.current = null;
     installedBridge.current = null;
@@ -195,6 +208,12 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       }, REQUEST_TIMEOUT_MS);
       navigationWait.current = { origin, resolve, reject, timeout };
       const destination = origin === CARD_ORIGIN ? CARD_URL : SIGECAD_HOME;
+      // Updating `source` is reliable even while WKWebView is covered by the
+      // native app. Injected location changes can be deferred indefinitely by
+      // iOS for an off-screen/transparent page, which used to cost 15 seconds.
+      // A Fast Refresh/process restoration can preserve `source` while refs
+      // that tracked the loaded origin are rebuilt. Setting the same URI is a
+      // React no-op, so explicitly reload it to complete the ready handshake.
       if (browserUri === destination) webView.current?.reload();
       else setBrowserUri(destination);
     });
@@ -276,6 +295,9 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
         }
       };
 
+      // Native injectJavaScript calls can overtake one another. After a portal
+      // navigation, wait for the first response (which installs the bootstrap)
+      // before releasing command-only requests to the concurrent workers.
       if (installedBridge.current !== ACADEMIC_BRIDGE_REVISION && pendingIndices.length) {
         await execute(pendingIndices.shift() as number);
       }
@@ -332,30 +354,50 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     return result;
   }, [ensureOrigin, injectDocumentRequest]);
 
+  const abortInFlightBridge = useCallback(() => {
+    connectAttempt.current += 1;
+    connecting.current = false;
+    installedBridge.current = null;
+    rejectAll(new PortalBridgeError("A sessão ainda está abrindo.", "timeout"));
+  }, [rejectAll]);
+
   const connect = useCallback(async () => {
-    if (connecting.current) return;
+    const attempt = ++connectAttempt.current;
     connecting.current = true;
     setError(null);
     setPhase("connecting");
     try {
       const periods = await request("periodos");
+      if (attempt !== connectAttempt.current) return;
       periodCache.current = { value: periods, cachedAt: Date.now() };
+      connectRetries.current = 0;
       setPhase("ready");
     } catch (cause) {
+      if (attempt !== connectAttempt.current) return;
       const bridgeError = cause instanceof PortalBridgeError ? cause : null;
       if (bridgeError?.code === "auth") {
+        connectRetries.current = 0;
         reopenLogin();
-      } else {
-        setError(messageOf(cause));
-        setPhase("error");
+        return;
       }
+      if (connectRetries.current < 1) {
+        connectRetries.current += 1;
+        connecting.current = false;
+        void connect();
+        return;
+      }
+      setError(messageOf(cause));
+      setPhase("error");
     } finally {
-      connecting.current = false;
+      if (attempt === connectAttempt.current) connecting.current = false;
     }
   }, [request, reopenLogin]);
 
-  function onNavigation(nav: WebViewNavigation) {
-    if (isAcademicUrl(nav.url) && phase === "login") setPhase("connecting");
+  function coverAcademicNavigation(url: string) {
+    if ((phase === "login" || phase === "connecting" || phase === "error") &&
+      (isStableAcademicUrl(url) || hasCasServiceTicket(url))) {
+      setPhase("connecting");
+    }
   }
 
   function markOriginReady(url: string) {
@@ -374,11 +416,39 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       if (phase === "ready" || phase === "offline") setPhase("expired");
       else reopenLogin();
     }
-    if (isAcademicUrl(url) && (phase === "login" || phase === "connecting")) void connect();
+    coverAcademicNavigation(url);
+    if (hasCasServiceTicket(url)) {
+      abortInFlightBridge();
+      if (ticketSettle.current) clearTimeout(ticketSettle.current);
+      const scheduled = connectAttempt.current;
+      ticketSettle.current = setTimeout(() => {
+        ticketSettle.current = null;
+        if (scheduled !== connectAttempt.current) return;
+        void connect();
+      }, 800);
+      return;
+    }
+    if (ticketSettle.current) {
+      clearTimeout(ticketSettle.current);
+      ticketSettle.current = null;
+    }
+    if (isStableAcademicUrl(url) && (phase === "login" || phase === "connecting" || phase === "error")) {
+      void connect();
+    }
+  }
+
+  function onLoadStart(url: string) {
+    coverAcademicNavigation(url);
+    if (hasCasServiceTicket(url)) abortInFlightBridge();
   }
 
   function onLoadEnd(url: string) {
     markOriginReady(url);
+  }
+
+  function onOpenWindow(event: { nativeEvent: { targetUrl: string } }) {
+    const url = event.nativeEvent.targetUrl;
+    if (isAllowedSessionUrl(url)) setBrowserUri(url);
   }
 
   function onMessage(event: WebViewMessageEvent) {
@@ -406,7 +476,7 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
         if (__DEV__) console.info(`[SIGECAD ponte] ${perf.stage}: ${perf.elapsed}ms`);
         return;
       }
-    } catch {  }
+    } catch { /* Não é uma mensagem de performance; validar como resposta normal. */ }
     let response;
     try {
       response = parseBridgeResponse(event.nativeEvent.data);
@@ -427,9 +497,8 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     }
     const error = bridgeError(response.error, response.status);
     item.reject(error);
-    if (error.code === "auth") {
-      if (phase === "ready" || phase === "offline") setPhase("expired");
-      else reopenLogin();
+    if (error.code === "auth" && (phase === "ready" || phase === "offline")) {
+      setPhase("expired");
     }
   }
 
@@ -514,6 +583,8 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
             ));
           });
       }
+      // The signed Webdoc URL is consumed only by the temporary native download;
+      // never navigate the session WebView to it or expose it to the UI.
       return false;
     }
     if (safeHttpsOrigin(url) === WEBDOC_ORIGIN) return false;
@@ -527,6 +598,8 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
 
   const ready = phase === "ready";
   const showContent = ready || phase === "expired" || phase === "offline";
+  const showLoginChrome = phase === "login" || phase === "error";
+  const coveringPortal = phase === "connecting";
   const hiddenBrowserStyle = Platform.OS === "android"
     ? styles.hiddenBrowserAndroid
     : styles.hiddenBrowser;
@@ -534,7 +607,8 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     <PortalSessionContext.Provider value={value}>
       <View style={styles.root}>
         {!showContent ? <StatusBar barStyle="dark-content" backgroundColor={colors.background} /> : null}
-        {showContent ? <View style={styles.contentLayer}>{children}</View> : (
+        {showContent ? <View style={styles.contentLayer}>{children}</View> : null}
+        {showLoginChrome ? (
           <SafeAreaView edges={["top", "left", "right"]} style={styles.loginSafe}>
             <View style={styles.loginShell}>
             <View style={styles.loginBrand}>
@@ -546,16 +620,10 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
             <View style={styles.copy}>
               <Text style={styles.title}>Acesso com sua conta UFGDNET</Text>
               <Text style={styles.subtitle}>
-                A autenticação acontece no portal oficial da UFGD — o app não vê sua senha.
+                Entre no portal oficial dentro do app. A senha fica só neste aparelho.
               </Text>
               <View style={styles.originPill}><Text style={styles.originText}>login.app.ufgd.edu.br</Text></View>
             </View>
-            {phase === "connecting" ? (
-              <View style={styles.connecting}>
-                <ActivityIndicator color={colors.primary} />
-                <Text style={styles.connectingText}>Conectando ao seu período…</Text>
-              </View>
-            ) : null}
             {error ? (
               <>
                 <Notice danger>{error}</Notice>
@@ -564,16 +632,17 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
             ) : null}
             </View>
           </SafeAreaView>
-        )}
+        ) : null}
         <WebView
           key={webKey}
           ref={webView}
           source={{ uri: browserUri }}
-          pointerEvents={showContent ? "none" : "auto"}
+          pointerEvents={showLoginChrome ? "auto" : "none"}
           style={showContent ? hiddenBrowserStyle : styles.browser}
           containerStyle={showContent ? hiddenBrowserStyle : styles.browserContainer}
-          onNavigationStateChange={onNavigation}
+          onLoadStart={(event) => onLoadStart(event.nativeEvent.url)}
           onLoadEnd={(event) => onLoadEnd(event.nativeEvent.url)}
+          onOpenWindow={onOpenWindow}
           onMessage={onMessage}
           injectedJavaScriptBeforeContentLoaded={NAV_READY_SCRIPT}
           onError={() => {
@@ -597,11 +666,11 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
           allowFileAccessFromFileURLs={false}
           allowUniversalAccessFromFileURLs={false}
           allowingReadAccessToURL=""
-          setSupportMultipleWindows={false}
+          setSupportMultipleWindows
           javaScriptCanOpenWindowsAutomatically={false}
           geolocationEnabled={false}
           mediaPlaybackRequiresUserAction
-          startInLoadingState
+          startInLoadingState={showLoginChrome}
           renderLoading={() => (
             <View style={styles.loading}>
               <ActivityIndicator color={colors.primary} />
@@ -611,6 +680,15 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
           onShouldStartLoadWithRequest={onShouldStartLoad}
           onFileDownload={() => undefined}
         />
+        {coveringPortal ? (
+          <View style={styles.connectingOverlay} pointerEvents="auto">
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.connectingTitle}>Entrando no SIGECAD…</Text>
+            <Text style={styles.connectingCopy}>
+              A sessão fica só neste aparelho. O app não vê sua senha.
+            </Text>
+          </View>
+        ) : null}
         {phase === "expired" ? (
           <View style={styles.expiredOverlay}>
             <View style={styles.expiredSheet}>
@@ -638,7 +716,7 @@ async function destroyBrowserSession(view: WebView | null): Promise<void> {
   try {
     const CookieManager = (await import("@preeternal/react-native-cookie-manager")).default;
     await CookieManager.clearAll(true);
-  } catch {  }
+  } catch { /* Cookie manager is unavailable in some runtimes. */ }
   view?.clearCache?.(true);
   view?.clearHistory?.();
   view?.injectJavaScript?.("try{localStorage.clear();sessionStorage.clear();}catch(e){} true;");
@@ -667,6 +745,9 @@ function messageOf(cause: unknown): string {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+  // Keep the authenticated UI physically above the live bridge WebView on
+  // Android. `pointerEvents="none"` alone does not reliably stop a native
+  // WebView from intercepting hardware/ADB taps when it is the top sibling.
   contentLayer: { flex: 1, position: "relative", zIndex: 1 },
   loginSafe: { backgroundColor: colors.background },
   loginShell: { paddingHorizontal: 20, paddingTop: 18, gap: spacing.md },
@@ -681,6 +762,17 @@ const styles = StyleSheet.create({
   originText: { color: "#5C6B63", fontFamily: fonts.mono, fontSize: 10.5 },
   connecting: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   connectingText: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13 },
+  connectingOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 2,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingHorizontal: 32,
+  },
+  connectingTitle: { color: "#17201C", fontFamily: fonts.sansSemibold, fontSize: 20, lineHeight: 26, textAlign: "center" },
+  connectingCopy: { color: "#3D4A43", fontFamily: fonts.sans, fontSize: 13, lineHeight: 20, textAlign: "center" },
   browserContainer: {
     flex: 1,
     marginHorizontal: spacing.md,
@@ -692,11 +784,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   browser: { flex: 1, backgroundColor: colors.surface },
-  hiddenBrowser: { ...StyleSheet.absoluteFillObject, opacity: 0.01, zIndex: 0 },
+  // WKWebView may suspend navigation/network when reduced to 1×1 and fully
+  // transparent. Keep a laid-out, non-interactive surface behind the app.
+  hiddenBrowser: { ...StyleSheet.absoluteFill, opacity: 0.01, zIndex: 0 },
+  // Android's native WebView may intercept hardware taps even with
+  // pointerEvents="none". It continues bridge fetches in this tiny off-screen
+  // surface, while the dashboard owns the entire interactive area.
+  // Android may defer cross-origin WebView navigation when the view is fully
+  // transparent and outside the viewport. Keep a drawable 2 px surface behind
+  // the native dashboard; z-index + pointerEvents prevent visual/touch overlap.
   hiddenBrowserAndroid: { position: "absolute", width: 2, height: 2, left: 0, bottom: 0, opacity: 0.01, zIndex: 0 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm },
   expiredOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 2,
     backgroundColor: "rgba(23,32,28,0.25)",
     justifyContent: "flex-end",
