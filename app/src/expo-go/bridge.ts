@@ -101,7 +101,7 @@ export function parseBridgeResponse(raw: string): BridgeResponse {
  */
 export const BRIDGE_BOOTSTRAP = `
 (function () {
-  if (window.__SIGECAD_BRIDGE_VERSION__ === 4 && window.__SIGECAD_REQUEST__ &&
+  if (window.__SIGECAD_BRIDGE_VERSION__ === 5 && window.__SIGECAD_REQUEST__ &&
     window.__SIGECAD_DOCUMENT__) return true;
   var CHANNEL = ${JSON.stringify(BRIDGE_CHANNEL)};
   var DOCUMENT_CHANNEL = ${JSON.stringify(DOCUMENT_BRIDGE_CHANNEL)};
@@ -357,20 +357,47 @@ export const BRIDGE_BOOTSTRAP = `
     if (Number.isFinite(announced) && announced > MAX_DOCUMENT_BYTES) throw new Error("SIZE");
     return response;
   }
-  function beginSignedDocumentNavigation(request) {
+  function isSignedWebdoc(value) {
+    try {
+      var url = new URL(value);
+      if (url.protocol !== "https:" || url.hostname !== "webdoc.app.ufgd.edu.br" || url.pathname !== "/gerar") return false;
+      var keys = Array.prototype.slice.call(url.searchParams.keys()).sort();
+      if (keys.join(",") !== "documento,hash") return false;
+      var documento = url.searchParams.get("documento") || "";
+      var hash = url.searchParams.get("hash") || "";
+      return documento.length >= 8 && documento.length <= 40 && /^[A-Za-z0-9_-]+$/.test(documento) &&
+        /^[a-f0-9]{32}$/i.test(hash);
+    } catch (_) { return false; }
+  }
+  function signedDocumentPath(request) {
     if (!documentLinks) scanDocumentLinks();
     if (request.kind === "teaching-plan") {
       if (!Number.isSafeInteger(request.planId) || !teachingPlanIds.has(request.planId)) {
         throw new Error("PLAN");
       }
-      window.location.assign("/graduacao/relatorios/planoensino?peID=" + request.planId);
-      return;
+      return "/graduacao/relatorios/planoensino?peID=" + request.planId;
     }
     var target = request.kind === "enrollment-certificate"
       ? documentLinks.enrollmentCertificate
       : documentLinks.schoolTranscript;
     if (!target || !target.available || !target.path) throw new Error("UNAVAILABLE");
-    window.location.assign(withNameMode(target.path, target.supportsSocialName, request.nameMode));
+    return withNameMode(target.path, target.supportsSocialName, request.nameMode);
+  }
+  async function captureSignedDocument(request) {
+    var path = signedDocumentPath(request);
+    try {
+      var response = await fetch(path, {
+        method: "GET",
+        credentials: "include",
+        redirect: "follow",
+        headers: { Accept: "application/pdf, */*;q=0.2" }
+      });
+      if (isSignedWebdoc(response.url)) {
+        sendDocument({ id: request.id, type: "signed-url", url: response.url });
+        return;
+      }
+    } catch (_) {}
+    window.location.assign(path);
   }
   function base64Of(bytes) {
     var binary = "";
@@ -386,7 +413,7 @@ export const BRIDGE_BOOTSTRAP = `
     try {
       if (request.kind === "enrollment-certificate" || request.kind === "school-transcript" ||
         request.kind === "teaching-plan") {
-        beginSignedDocumentNavigation(request);
+        await captureSignedDocument(request);
         return;
       }
       var response = await resolveDocumentResponse(request);
@@ -411,7 +438,7 @@ export const BRIDGE_BOOTSTRAP = `
       sendDocument({ id: request.id, type: "error", error: code });
     }
   };
-  window.__SIGECAD_BRIDGE_VERSION__ = 4;
+  window.__SIGECAD_BRIDGE_VERSION__ = 5;
   return true;
 })();
 true;

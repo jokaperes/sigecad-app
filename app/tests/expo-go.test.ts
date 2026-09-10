@@ -204,7 +204,8 @@ await check("ponte acadêmica mantém allowlist GET e nunca aceita caminho do ch
   assert(!BRIDGE_BOOTSTRAP.includes("document.cookie"));
   assert(!BRIDGE_BOOTSTRAP.includes("request.path"));
   assert(!BRIDGE_BOOTSTRAP.includes("request.url"));
-  for (const discarded of ["endereco", "documento", "telefone", "nome_mae", "justificativa_aluno"]) {
+  assert(BRIDGE_BOOTSTRAP.includes('searchParams.get("documento")'));
+  for (const discarded of ["endereco", "telefone", "nome_mae", "justificativa_aluno"]) {
     assert(!BRIDGE_BOOTSTRAP.includes(`"${discarded}"`), `campo pessoal atravessa a ponte: ${discarded}`);
   }
 });
@@ -267,6 +268,14 @@ await check("canal de PDF valida ordem e tamanho dos fragmentos", () => {
 await check("download assinado aceita somente o Webdoc oficial e parâmetros estritos", () => {
   const valid = "https://webdoc.app.ufgd.edu.br/gerar?documento=Documento_12345678&hash=" + "a".repeat(32);
   assert(isAllowedSignedDocumentUrl(valid));
+  const signed = parseDocumentBridgeMessage(JSON.stringify({
+    channel: DOCUMENT_BRIDGE_CHANNEL, id: "doc-9", type: "signed-url", url: valid,
+  }));
+  assert(signed?.type === "signed-url" && signed.url === valid);
+  assert(parseDocumentBridgeMessage(JSON.stringify({
+    channel: DOCUMENT_BRIDGE_CHANNEL, id: "doc-9", type: "signed-url",
+    url: valid.replace("webdoc.app.ufgd.edu.br", "attacker.invalid"),
+  })) === null);
   assert(!isAllowedSignedDocumentUrl(valid.replace("webdoc.app.ufgd.edu.br", "attacker.invalid")));
   assert(!isAllowedSignedDocumentUrl(valid + "&next=https://attacker.invalid"));
   assert(!isAllowedSignedDocumentUrl(valid.replace("a".repeat(32), "not-a-hash")));
@@ -282,8 +291,10 @@ await check("ponte de documentos usa GET, PDF autenticado e registros internos",
   assert(BRIDGE_BOOTSTRAP.includes('method: "GET"'));
   assert(BRIDGE_BOOTSTRAP.includes("bytes[0] !== 0x25") && BRIDGE_BOOTSTRAP.includes("bytes[4] !== 0x2d"));
   assert(BRIDGE_BOOTSTRAP.includes("totalChunks"));
-  assert(BRIDGE_BOOTSTRAP.includes("beginSignedDocumentNavigation"));
-  assert(BRIDGE_BOOTSTRAP.includes("__SIGECAD_BRIDGE_VERSION__ = 4"));
+  assert(BRIDGE_BOOTSTRAP.includes("captureSignedDocument"));
+  assert(BRIDGE_BOOTSTRAP.includes("isSignedWebdoc"));
+  assert(BRIDGE_BOOTSTRAP.includes("type: \"signed-url\""));
+  assert(BRIDGE_BOOTSTRAP.includes("__SIGECAD_BRIDGE_VERSION__ = 5"));
   assert(BRIDGE_BOOTSTRAP.includes('"/graduacao/relatorios/planoensino?peID=" + request.planId'));
   assert(BRIDGE_BOOTSTRAP.includes("teachingPlanIds.has(request.planId)"));
   assert(!BRIDGE_BOOTSTRAP.includes("postOnlyPlan"));
@@ -298,6 +309,10 @@ await check("Webdoc assinado é interceptado sem navegar nem expor parâmetros",
   assert(source.includes("shareSignedAcademicDocument(item.kind, url)"));
   assert(source.includes('item.kind === "teaching-plan"'));
   assert(source.includes("return false;"));
+  assert(source.includes("consumeSignedDocumentUrl"));
+  assert(source.includes("documentBrowserAndroid"));
+  assert(source.includes("Preparando o PDF oficial"));
+  assert(source.includes("onFileDownload={(event) => { consumeSignedDocumentUrl(event.nativeEvent.downloadUrl); }}"));
   assert(!source.includes("console.log(url)") && !source.includes("console.info(url)"));
 });
 

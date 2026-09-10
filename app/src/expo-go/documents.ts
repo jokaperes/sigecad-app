@@ -77,6 +77,12 @@ export type DocumentBridgeMessage =
     id: string;
     type: "error";
     error: "auth" | "unavailable" | "invalid" | "too-large" | "network";
+  }
+  | {
+    channel: typeof DOCUMENT_BRIDGE_CHANNEL;
+    id: string;
+    type: "signed-url";
+    url: string;
   };
 
 export function parseDocumentCatalog(value: unknown): AcademicDocumentCatalog {
@@ -164,6 +170,9 @@ export function parseDocumentBridgeMessage(raw: string): DocumentBridgeMessage |
   if (item.type === "error" && typeof item.error === "string" &&
     ["auth", "unavailable", "invalid", "too-large", "network"].includes(item.error)) {
     return item as unknown as DocumentBridgeMessage;
+  }
+  if (item.type === "signed-url" && typeof item.url === "string" && isAllowedSignedDocumentUrl(item.url)) {
+    return { channel: DOCUMENT_BRIDGE_CHANNEL, id: item.id, type: "signed-url", url: item.url };
   }
   return null;
 }
