@@ -46,3 +46,18 @@ export function isLoginUrl(value: string): boolean {
 export function isCardUrl(value: string): boolean {
   return safeHttpsOrigin(value) === CARD_ORIGIN;
 }
+
+// CAS puts a one-time `ticket` query on the SIGECAD URL. That page is still
+// finishing SSO and is not ready for the academic bridge. Never log the URL.
+export function hasCasServiceTicket(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.origin === SIGECAD_ORIGIN && url.searchParams.has("ticket");
+  } catch {
+    return false;
+  }
+}
+
+export function isStableAcademicUrl(value: string): boolean {
+  return isAcademicUrl(value) && !hasCasServiceTicket(value);
+}

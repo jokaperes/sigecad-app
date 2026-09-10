@@ -17,6 +17,7 @@ const CAS_URL =
 
 export function NativeLoginScreen({ onDone: _onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
+  const [browserUri, setBrowserUri] = useState(CAS_URL);
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -28,7 +29,7 @@ export function NativeLoginScreen({ onDone: _onDone }: { onDone: () => void }) {
       </View>
       <View style={styles.browser}>
         <WebView
-          source={{ uri: CAS_URL }}
+          source={{ uri: browserUri }}
           onError={() => setError("Não foi possível abrir o login da UFGD. Verifique sua conexão.")}
           incognito
           cacheEnabled={false}
@@ -40,7 +41,7 @@ export function NativeLoginScreen({ onDone: _onDone }: { onDone: () => void }) {
           allowFileAccess={false}
           allowFileAccessFromFileURLs={false}
           allowUniversalAccessFromFileURLs={false}
-          setSupportMultipleWindows={false}
+          setSupportMultipleWindows
           javaScriptCanOpenWindowsAutomatically={false}
           geolocationEnabled={false}
           startInLoadingState
@@ -51,6 +52,9 @@ export function NativeLoginScreen({ onDone: _onDone }: { onDone: () => void }) {
             </View>
           )}
           onShouldStartLoadWithRequest={({ url }) => isAllowedSessionUrl(url)}
+          onOpenWindow={({ nativeEvent }) => {
+            if (isAllowedSessionUrl(nativeEvent.targetUrl)) setBrowserUri(nativeEvent.targetUrl);
+          }}
         />
       </View>
       <Text style={styles.footer}>Domínios permitidos: CAS, gov.br oficial, SIGECAD e cartão da UFGD</Text>

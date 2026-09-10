@@ -104,7 +104,7 @@ await check("dashboard fica acima da WebView oculta no Android", () => {
   assert(source.includes('Platform.OS === "android"'));
   assert(source.includes('hiddenBrowserAndroid: { position: "absolute", width: 2, height: 2, left: 0'));
   assert(source.includes('bottom: 0, opacity: 0.01, zIndex: 0'));
-  assert(source.includes('pointerEvents={showContent ? "none" : "auto"}'));
+  assert(source.includes('pointerEvents={showLoginChrome ? "auto" : "none"}'));
 });
 
 await check("telas secundárias distinguem carregamento e não truncam notas", () => {
@@ -127,7 +127,13 @@ await check("login começa no CAS e só conecta depois do SIGECAD", () => {
   assert(!source.includes("const [browserUri, setBrowserUri] = useState(SIGECAD_HOME);"));
   assert(!source.includes("function onNavigation"));
   assert(!source.includes("onNavigationStateChange={onNavigation}"));
-  assert(source.includes('if (isAcademicUrl(url) && (phase === "login" || phase === "connecting")) void connect();'));
+  assert(source.includes("isStableAcademicUrl(url)"));
+  assert(source.includes("hasCasServiceTicket(url)"));
+  assert(source.includes("abortInFlightBridge"));
+  assert(source.includes("coveringPortal"));
+  assert(source.includes("onOpenWindow={onOpenWindow}"));
+  assert(source.includes("Entrando no SIGECAD"));
+  assert(source.includes("A sessão fica só neste aparelho"));
 });
 
 await check("sessão reutiliza períodos e instala cada bridge uma vez por página", () => {

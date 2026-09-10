@@ -21,6 +21,8 @@ import {
   isAllowedSessionUrl,
   isBridgeUrl,
   isLoginUrl,
+  isStableAcademicUrl,
+  hasCasServiceTicket,
 } from "../src/expo-go/origins";
 import { SENTINEL_ENABLED } from "../src/native/sentinelFlag";
 
@@ -97,6 +99,18 @@ await check("somente origens da sessão autenticada são permitidas", () => {
   assert(WEBVIEW_ORIGIN_WHITELIST.length === 1 && WEBVIEW_ORIGIN_WHITELIST[0] === "https://*");
 });
 
+await check("ticket CAS não é sessão acadêmica estável e não vaza no helper", () => {
+  const ticket = `${SIGECAD_ORIGIN}/?ticket=ST-secret-value`;
+  assert(hasCasServiceTicket(ticket));
+  assert(!isStableAcademicUrl(ticket));
+  assert(isStableAcademicUrl(`${SIGECAD_ORIGIN}/`));
+  assert(!hasCasServiceTicket(`${SIGECAD_ORIGIN}/`));
+  assert(!hasCasServiceTicket(`${CAS_ORIGIN}/?ticket=ST-secret-value`));
+  const helper = source("src/expo-go/origins.ts");
+  assert(helper.includes("url.searchParams.has(\"ticket\")"));
+  assert(!helper.includes("searchParams.get(\"ticket\")"));
+});
+
 await check("ponte nunca lê cookie, senha ou caminho livre", () => {
   for (const blob of [BRIDGE_BOOTSTRAP, CARD_BRIDGE_BOOTSTRAP]) {
     assert(!blob.includes("document.cookie"));
@@ -154,6 +168,10 @@ await check("WebView de sessão está endurecida", () => {
   assert(!session.includes("CookieManager.get"));
   assert(session.includes("if (origin !=="));
   assert(!session.includes("endsWith(\".ufgd.edu.br\")"));
+  assert(session.includes("onOpenWindow={onOpenWindow}"));
+  assert(session.includes("setSupportMultipleWindows"));
+  assert(session.includes("isAllowedSessionUrl(url)"));
+  assert(!session.includes("Linking.openURL"));
 });
 
 await check("plugin e app.json endurecem o Android de produção", () => {

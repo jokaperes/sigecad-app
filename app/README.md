@@ -23,8 +23,9 @@ npm run start:go -- --tunnel
 ```
 
 O login começa na página CAS oficial da UFGD. A senha, o redirect (inclusive o
-provedor oficial gov.br) e o cookie permanecem na mesma WebView privada; links
-HTTPS fora da sessão são rejeitados dentro do app. As rotas acadêmicas usam uma
+provedor oficial gov.br) e o cookie permanecem na mesma WebView privada; o site
+do SIGECAD não é mostrado depois do login. Links HTTPS fora da sessão são
+rejeitados dentro do app. As rotas acadêmicas usam uma
 allowlist fixa somente GET; no portal Cartão,
 ID e hash são derivados somente da página da própria sessão. Notas, foto, saldos
 e extratos ficam em memória e somente hashes/rótulos acadêmicos são persistidos.

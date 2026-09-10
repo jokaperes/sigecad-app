@@ -31,10 +31,11 @@ import {
   SIGECAD_ORIGIN,
   WEBDOC_ORIGIN,
   WEBVIEW_ORIGIN_WHITELIST,
-  isAcademicUrl,
   isAllowedSessionUrl,
   isBridgeUrl,
   isLoginUrl,
+  isStableAcademicUrl,
+  hasCasServiceTicket,
   safeHttpsOrigin,
 } from "./origins";
 import type { PortalBatchItem, PortalBatchRequest } from "./client";
@@ -126,6 +127,9 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   const operationQueue = useRef<Promise<void>>(Promise.resolve());
   const requestCounter = useRef(0);
   const connecting = useRef(false);
+  const connectAttempt = useRef(0);
+  const connectRetries = useRef(0);
+  const ticketSettle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const periodCache = useRef<{ value: unknown; cachedAt: number } | null>(null);
   const installedBridge = useRef<string | null>(null);
   const [phase, setPhase] = useState<SessionPhase>("login");
@@ -165,6 +169,12 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     currentOrigin.current = null;
     operationQueue.current = Promise.resolve();
     connecting.current = false;
+    connectAttempt.current += 1;
+    connectRetries.current = 0;
+    if (ticketSettle.current) {
+      clearTimeout(ticketSettle.current);
+      ticketSettle.current = null;
+    }
     requestCounter.current = 0;
     periodCache.current = null;
     installedBridge.current = null;
@@ -344,27 +354,51 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     return result;
   }, [ensureOrigin, injectDocumentRequest]);
 
+  const abortInFlightBridge = useCallback(() => {
+    connectAttempt.current += 1;
+    connecting.current = false;
+    installedBridge.current = null;
+    rejectAll(new PortalBridgeError("A sessão ainda está abrindo.", "timeout"));
+  }, [rejectAll]);
+
   const connect = useCallback(async () => {
-    if (connecting.current) return;
+    const attempt = ++connectAttempt.current;
     connecting.current = true;
     setError(null);
     setPhase("connecting");
     try {
       const periods = await request("periodos");
+      if (attempt !== connectAttempt.current) return;
       periodCache.current = { value: periods, cachedAt: Date.now() };
+      connectRetries.current = 0;
       setPhase("ready");
     } catch (cause) {
+      if (attempt !== connectAttempt.current) return;
       const bridgeError = cause instanceof PortalBridgeError ? cause : null;
       if (bridgeError?.code === "auth") {
+        connectRetries.current = 0;
         reopenLogin();
-      } else {
-        setError(messageOf(cause));
-        setPhase("error");
+        return;
       }
+      if (connectRetries.current < 1) {
+        connectRetries.current += 1;
+        connecting.current = false;
+        void connect();
+        return;
+      }
+      setError(messageOf(cause));
+      setPhase("error");
     } finally {
-      connecting.current = false;
+      if (attempt === connectAttempt.current) connecting.current = false;
     }
   }, [request, reopenLogin]);
+
+  function coverAcademicNavigation(url: string) {
+    if ((phase === "login" || phase === "connecting" || phase === "error") &&
+      (isStableAcademicUrl(url) || hasCasServiceTicket(url))) {
+      setPhase("connecting");
+    }
+  }
 
   function markOriginReady(url: string) {
     const origin = safeHttpsOrigin(url);
@@ -382,11 +416,39 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       if (phase === "ready" || phase === "offline") setPhase("expired");
       else reopenLogin();
     }
-    if (isAcademicUrl(url) && (phase === "login" || phase === "connecting")) void connect();
+    coverAcademicNavigation(url);
+    if (hasCasServiceTicket(url)) {
+      abortInFlightBridge();
+      if (ticketSettle.current) clearTimeout(ticketSettle.current);
+      const scheduled = connectAttempt.current;
+      ticketSettle.current = setTimeout(() => {
+        ticketSettle.current = null;
+        if (scheduled !== connectAttempt.current) return;
+        void connect();
+      }, 800);
+      return;
+    }
+    if (ticketSettle.current) {
+      clearTimeout(ticketSettle.current);
+      ticketSettle.current = null;
+    }
+    if (isStableAcademicUrl(url) && (phase === "login" || phase === "connecting" || phase === "error")) {
+      void connect();
+    }
+  }
+
+  function onLoadStart(url: string) {
+    coverAcademicNavigation(url);
+    if (hasCasServiceTicket(url)) abortInFlightBridge();
   }
 
   function onLoadEnd(url: string) {
     markOriginReady(url);
+  }
+
+  function onOpenWindow(event: { nativeEvent: { targetUrl: string } }) {
+    const url = event.nativeEvent.targetUrl;
+    if (isAllowedSessionUrl(url)) setBrowserUri(url);
   }
 
   function onMessage(event: WebViewMessageEvent) {
@@ -435,9 +497,8 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     }
     const error = bridgeError(response.error, response.status);
     item.reject(error);
-    if (error.code === "auth") {
-      if (phase === "ready" || phase === "offline") setPhase("expired");
-      else reopenLogin();
+    if (error.code === "auth" && (phase === "ready" || phase === "offline")) {
+      setPhase("expired");
     }
   }
 
@@ -537,6 +598,8 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
 
   const ready = phase === "ready";
   const showContent = ready || phase === "expired" || phase === "offline";
+  const showLoginChrome = phase === "login" || phase === "error";
+  const coveringPortal = phase === "connecting";
   const hiddenBrowserStyle = Platform.OS === "android"
     ? styles.hiddenBrowserAndroid
     : styles.hiddenBrowser;
@@ -544,7 +607,8 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     <PortalSessionContext.Provider value={value}>
       <View style={styles.root}>
         {!showContent ? <StatusBar barStyle="dark-content" backgroundColor={colors.background} /> : null}
-        {showContent ? <View style={styles.contentLayer}>{children}</View> : (
+        {showContent ? <View style={styles.contentLayer}>{children}</View> : null}
+        {showLoginChrome ? (
           <SafeAreaView edges={["top", "left", "right"]} style={styles.loginSafe}>
             <View style={styles.loginShell}>
             <View style={styles.loginBrand}>
@@ -556,16 +620,10 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
             <View style={styles.copy}>
               <Text style={styles.title}>Acesso com sua conta UFGDNET</Text>
               <Text style={styles.subtitle}>
-                A autenticação acontece no portal oficial da UFGD — o app não vê sua senha.
+                Entre no portal oficial dentro do app. A senha fica só neste aparelho.
               </Text>
               <View style={styles.originPill}><Text style={styles.originText}>login.app.ufgd.edu.br</Text></View>
             </View>
-            {phase === "connecting" ? (
-              <View style={styles.connecting}>
-                <ActivityIndicator color={colors.primary} />
-                <Text style={styles.connectingText}>Conectando ao seu período…</Text>
-              </View>
-            ) : null}
             {error ? (
               <>
                 <Notice danger>{error}</Notice>
@@ -574,15 +632,17 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
             ) : null}
             </View>
           </SafeAreaView>
-        )}
+        ) : null}
         <WebView
           key={webKey}
           ref={webView}
           source={{ uri: browserUri }}
-          pointerEvents={showContent ? "none" : "auto"}
+          pointerEvents={showLoginChrome ? "auto" : "none"}
           style={showContent ? hiddenBrowserStyle : styles.browser}
           containerStyle={showContent ? hiddenBrowserStyle : styles.browserContainer}
+          onLoadStart={(event) => onLoadStart(event.nativeEvent.url)}
           onLoadEnd={(event) => onLoadEnd(event.nativeEvent.url)}
+          onOpenWindow={onOpenWindow}
           onMessage={onMessage}
           injectedJavaScriptBeforeContentLoaded={NAV_READY_SCRIPT}
           onError={() => {
@@ -606,11 +666,11 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
           allowFileAccessFromFileURLs={false}
           allowUniversalAccessFromFileURLs={false}
           allowingReadAccessToURL=""
-          setSupportMultipleWindows={false}
+          setSupportMultipleWindows
           javaScriptCanOpenWindowsAutomatically={false}
           geolocationEnabled={false}
           mediaPlaybackRequiresUserAction
-          startInLoadingState
+          startInLoadingState={showLoginChrome}
           renderLoading={() => (
             <View style={styles.loading}>
               <ActivityIndicator color={colors.primary} />
@@ -620,6 +680,15 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
           onShouldStartLoadWithRequest={onShouldStartLoad}
           onFileDownload={() => undefined}
         />
+        {coveringPortal ? (
+          <View style={styles.connectingOverlay} pointerEvents="auto">
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.connectingTitle}>Entrando no SIGECAD…</Text>
+            <Text style={styles.connectingCopy}>
+              A sessão fica só neste aparelho. O app não vê sua senha.
+            </Text>
+          </View>
+        ) : null}
         {phase === "expired" ? (
           <View style={styles.expiredOverlay}>
             <View style={styles.expiredSheet}>
@@ -693,6 +762,17 @@ const styles = StyleSheet.create({
   originText: { color: "#5C6B63", fontFamily: fonts.mono, fontSize: 10.5 },
   connecting: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   connectingText: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13 },
+  connectingOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 2,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingHorizontal: 32,
+  },
+  connectingTitle: { color: "#17201C", fontFamily: fonts.sansSemibold, fontSize: 20, lineHeight: 26, textAlign: "center" },
+  connectingCopy: { color: "#3D4A43", fontFamily: fonts.sans, fontSize: 13, lineHeight: 20, textAlign: "center" },
   browserContainer: {
     flex: 1,
     marginHorizontal: spacing.md,

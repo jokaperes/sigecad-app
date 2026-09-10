@@ -56,11 +56,11 @@ Resultado esperado: 24/24 testes Python e 5/5 testes de Functions.
 
 6. Faça login somente na página oficial da UFGD exibida dentro da WebView. O
    CAS deve ser a primeira página; se usar “Entrar com gov.br”, o fluxo também
-   deve permanecer no app, sem abrir o Safari. O app não deve pedir que você
+   deve permanecer no app, sem abrir o Chrome/Safari. O app não deve pedir que você
    cole cookie, token ou senha em tela própria.
-7. Depois do redirect para o SIGECAD, a mensagem “Conectando ao seu período…”
-   deve desaparecer quando a consulta inicial terminar. Antes do login, ela
-   não deve aparecer nem deve haver consulta de períodos.
+7. Depois do redirect para o SIGECAD, o site oficial não deve aparecer. A tela
+   “Entrando no SIGECAD…” cobre o WebView até a Home nativa. Antes do login, essa
+   tela não deve aparecer nem deve haver consulta de períodos.
 
 ### Documentos acadêmicos
 
