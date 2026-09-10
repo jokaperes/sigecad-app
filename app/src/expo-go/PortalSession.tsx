@@ -754,7 +754,7 @@ const styles = StyleSheet.create({
   loginBrand: { flexDirection: "row", alignItems: "center", gap: 10 },
   loginMark: { width: 34, height: 34, borderRadius: 8, backgroundColor: "#174F3D", alignItems: "center", justifyContent: "center" },
   loginMarkImage: { width: 24, height: 24 },
-  loginBrandText: { color: "#17201C", fontFamily: fonts.monoSemibold, fontSize: 15, letterSpacing: 0.8 },
+  loginBrandText: { color: "#17201C", fontFamily: fonts.monoSemibold, fontSize: 15, letterSpacing: 0.8, paddingRight: 6, flexShrink: 0 },
   copy: { gap: spacing.xs, marginTop: spacing.sm },
   title: { color: "#17201C", fontFamily: fonts.sansSemibold, fontSize: 24, lineHeight: 30 },
   subtitle: { color: "#3D4A43", fontFamily: fonts.sans, fontSize: 13, lineHeight: 20 },
