@@ -259,6 +259,8 @@ function DesignDashboard() {
   }, []);
 
   const refresh = useCallback(async (manual = false) => {
+    // A second foreground cycle would only wait behind the same WebView queue
+    // and make the app slower. The current cycle already refreshes every view.
     if (refreshBusy.current) return;
     refreshBusy.current = true;
     let backgroundScheduled = false;
@@ -274,6 +276,8 @@ function DesignDashboard() {
     setSecondaryPhase("loading");
     setError(null);
     try {
+      // Identity, classes, schedule and enrollment windows share the first
+      // academic batch. Notes stay off Home's critical path.
       const startup = await loadAcademicStartupFast(request, requestBatch);
       const next = startup.overview;
       const currentPortal = portalDataFromStartup(startup.portal);
@@ -342,7 +346,7 @@ function DesignDashboard() {
             }
             reportLoadTiming("card-full", startedAt);
           }
-        } catch {  }
+        } catch { /* O resumo prioritário continua utilizável; falhas ficam sanitizadas. */ }
       })();
       backgroundScheduled = true;
       void background.finally(() => { refreshBusy.current = false; });
@@ -517,12 +521,12 @@ interface ScreenProps { theme: DesignTheme; styles: ReturnType<typeof createStyl
 function HomeCards({ overview, card, cardLoading, profile, portal, theme, styles, navigate }: ScreenProps & {
   overview: AcademicOverview; card: StudentCard | null; cardLoading: boolean; profile: AcademicProfile | null; portal: PortalData; navigate(route: Route): void;
 }) {
-  const activeCourses = overview.courses.filter((course) => !isFinishedCourse(course));
-  const schedule = activeScheduleEntries(portal.schedule, overview.courses);
-  const current = currentSchedule(schedule);
-  const next = nextSchedule(schedule, current);
-  const risks = [...activeCourses].filter((item) => item.absenceLimit && item.absences !== null && absenceRatio(item) >= .5)
-    .sort((a, b) => absenceRatio(b) - absenceRatio(a)).slice(0, 2);
+  const activeCourses = useMemo(() => overview.courses.filter((course) => !isFinishedCourse(course)), [overview.courses]);
+  const schedule = useMemo(() => activeScheduleEntries(portal.schedule, overview.courses), [portal.schedule, overview.courses]);
+  const current = useMemo(() => currentSchedule(schedule), [schedule]);
+  const next = useMemo(() => nextSchedule(schedule, current), [schedule, current]);
+  const risks = useMemo(() => [...activeCourses].filter((item) => item.absenceLimit && item.absences !== null && absenceRatio(item) >= .5)
+    .sort((a, b) => absenceRatio(b) - absenceRatio(a)).slice(0, 2), [activeCourses]);
   const name = firstName(profile?.name ?? card?.name);
   const featured = current ?? next;
   const featuredRoom = formatScheduleRoom(featured?.room);
@@ -709,7 +713,8 @@ function AbsencesScreen({ overview, portal, loading, variant, onVariantChange, t
 function ScheduleScreen({ period, entries, courses, theme, styles }: ScreenProps & { period: string; entries: ScheduleEntry[]; courses: AcademicCourse[] }) {
   const today = new Date().getDay();
   const [day, setDay] = useState(today >= 1 && today <= 5 ? today : 1);
-  const filtered = activeScheduleEntries(entries, courses).filter((entry) => entry.day === day);
+  const activeEntries = useMemo(() => activeScheduleEntries(entries, courses), [entries, courses]);
+  const filtered = useMemo(() => activeEntries.filter((entry) => entry.day === day), [activeEntries, day]);
   return (
     <View style={styles.page}>
       <View style={styles.rowBetween}><TitleBlock title="Horários" subtitle={period} styles={styles} /><CalendarDays size={23} color={theme.primary} /></View>
@@ -743,7 +748,10 @@ function CardScreen({ card, error, request, onCardUpdate, theme, styles }: Scree
     setPageError(null);
     setPhotoError(null);
   }, [card]);
-  const transactions = source === "ru" ? visibleCard?.ruTransactions ?? [] : visibleCard?.canteenTransactions ?? [];
+  const transactions = useMemo(
+    () => (source === "ru" ? visibleCard?.ruTransactions ?? [] : visibleCard?.canteenTransactions ?? []),
+    [source, visibleCard?.ruTransactions, visibleCard?.canteenTransactions],
+  );
 
   async function loadMore() {
     if (loadingMore || !canLoadMore) return;
@@ -928,6 +936,9 @@ function DocumentsScreen({ catalog, sections, loading, error, sharingKey, onShar
     () => sections.reduce((total, section) => total + section.plans.length, 0),
     [sections],
   );
+  // The authenticated REST list is the authoritative proof that this period
+  // has plan IDs. This also avoids depending on the menu page being the current
+  // hidden-WebView document when the catalog is scanned.
   const plansAvailability: DocumentAvailability = totalPlans
     ? { available: true, supportsSocialName: false }
     : catalog?.teachingPlans ?? unavailable;
@@ -1102,7 +1113,7 @@ function DiagnosticsScreen({ overview, card, portal, cardUnavailable, detailsLoa
 }
 
 function HistoryScreen({ portal, loading, theme, styles, back }: ScreenProps & { portal: PortalData; loading: boolean; back(): void }) {
-  const groups = groupHistory(portal.history);
+  const groups = useMemo(() => groupHistory(portal.history), [portal.history]);
   return (
     <View style={styles.page}>
       <BackHeader label="Perfil" onPress={back} theme={theme} styles={styles} />
@@ -1115,7 +1126,7 @@ function HistoryScreen({ portal, loading, theme, styles, back }: ScreenProps & {
 }
 
 function CurriculumScreen({ portal, loading, theme, styles, back }: ScreenProps & { portal: PortalData; loading: boolean; back(): void }) {
-  const semesters = chunk(portal.curriculum, 6);
+  const semesters = useMemo(() => chunk(portal.curriculum, 6), [portal.curriculum]);
   return (
     <View style={styles.page}>
       <BackHeader label="Perfil" onPress={back} theme={theme} styles={styles} />
@@ -1385,6 +1396,8 @@ function BarcodeStrip({ value, compact = false, styles }: {
     setBarcode(null);
     if (!value) return () => { active = false; };
     void bwipjs.toDataURL({
+      // Confirmed against the authenticated UFGD print view on 2026-07-16:
+      // the official symbol is Code 128 and its complete bar-width sequence matches.
       bcid: "code128",
       text: value,
       scaleX: 3,
@@ -1449,11 +1462,11 @@ function SkeletonCard({small,tall,styles}:{small?:boolean;tall?:boolean;styles:R
 function createStyles(theme: DesignTheme) {
   return StyleSheet.create({
     safeShell:{flex:1},shell:{flex:1,backgroundColor:theme.background},scroll:{flex:1},scrollContent:{paddingBottom:28},scrollContentWithTabs:{paddingBottom:96},page:{paddingHorizontal:16,paddingTop:16,gap:12},flex:{flex:1},pressed:{opacity:.68},pressableFlex:{flex:1},rowBetween:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",gap:12},topBorder:{borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:theme.border},
-    hero:{backgroundColor:theme.dark?theme.background:"#174F3D",paddingHorizontal:20,paddingTop:18,paddingBottom:18,gap:3,borderBottomWidth:theme.dark?1:0,borderBottomColor:theme.border},brandLockup:{flexDirection:"row",alignItems:"center",gap:7},brandSymbol:{width:21,height:21},logoSmall:{fontFamily:fonts.monoMedium,fontSize:12,letterSpacing:1,color:theme.dark?theme.muted:"#FFFFFF",opacity:.9},heroPeriod:{fontFamily:fonts.mono,fontSize:11,color:theme.dark?theme.body:"#FFFFFF",backgroundColor:theme.dark?theme.surfaceMuted:"rgba(255,255,255,.14)",paddingHorizontal:8,paddingVertical:4,borderRadius:4},heroTitle:{fontFamily:fonts.sansSemibold,fontSize:22,color:theme.dark?theme.ink:"#FFFFFF",marginTop:9},heroSubtitle:{fontFamily:fonts.sans,fontSize:12,color:theme.dark?theme.muted:"#FFFFFF",opacity:.72},
-    denseHero:{backgroundColor:theme.dark?theme.background:"#174F3D",padding:20,gap:18,borderBottomWidth:theme.dark?1:0,borderBottomColor:theme.border},periodOnGreen:{fontFamily:fonts.monoSemibold,fontSize:12,color:theme.dark?theme.ink:"#FFFFFF"},monoOnGreen:{fontFamily:fonts.mono,fontSize:11,color:theme.dark?theme.muted:"#FFFFFF",opacity:.75},denseMetrics:{flexDirection:"row",justifyContent:"space-between"},heroMetricLabel:{fontFamily:fonts.sansSemibold,fontSize:9.5,letterSpacing:.7,color:theme.dark?theme.muted:"#FFFFFF",opacity:.65},heroMetricValue:{fontFamily:fonts.monoSemibold,fontSize:16,color:theme.dark?theme.primary:"#FFFFFF",marginTop:2},
+    hero:{backgroundColor:theme.dark?theme.background:"#174F3D",paddingHorizontal:20,paddingTop:18,paddingBottom:18,gap:3,borderBottomWidth:theme.dark?1:0,borderBottomColor:theme.border},brandLockup:{flexDirection:"row",alignItems:"center",gap:7},brandSymbol:{width:21,height:21},logoSmall:{fontFamily:fonts.monoMedium,fontSize:12,letterSpacing:1,paddingRight:6,flexShrink:0,color:theme.dark?theme.muted:"#FFFFFF",opacity:.9},heroPeriod:{fontFamily:fonts.mono,fontSize:11,color:theme.dark?theme.body:"#FFFFFF",backgroundColor:theme.dark?theme.surfaceMuted:"rgba(255,255,255,.14)",paddingHorizontal:8,paddingVertical:4,borderRadius:4},heroTitle:{fontFamily:fonts.sansSemibold,fontSize:22,color:theme.dark?theme.ink:"#FFFFFF",marginTop:9},heroSubtitle:{fontFamily:fonts.sans,fontSize:12,color:theme.dark?theme.muted:"#FFFFFF",opacity:.72},
+    denseHero:{backgroundColor:theme.dark?theme.background:"#174F3D",padding:20,gap:18,borderBottomWidth:theme.dark?1:0,borderBottomColor:theme.border},periodOnGreen:{fontFamily:fonts.monoSemibold,fontSize:12,color:theme.dark?theme.ink:"#FFFFFF"},monoOnGreen:{fontFamily:fonts.mono,fontSize:11,color:theme.dark?theme.muted:"#FFFFFF",opacity:.75},denseMetrics:{flexDirection:"row",justifyContent:"space-between"},heroMetricLabel:{fontFamily:fonts.sansSemibold,fontSize:9.5,letterSpacing:.7,paddingRight:6,flexShrink:0,color:theme.dark?theme.muted:"#FFFFFF",opacity:.65},heroMetricValue:{fontFamily:fonts.monoSemibold,fontSize:16,color:theme.dark?theme.primary:"#FFFFFF",marginTop:2},
     agendaHeader:{paddingHorizontal:20,paddingTop:18,paddingBottom:10,flexDirection:"row",justifyContent:"space-between",alignItems:"center"},periodPill:{fontFamily:fonts.monoMedium,fontSize:11,color:"#FFFFFF",backgroundColor:theme.dark?"#315848":"#174F3D",paddingHorizontal:9,paddingVertical:5,borderRadius:4},
     surface:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:10,padding:14,gap:8},listSurface:{padding:0,overflow:"hidden"},metricGrid:{flexDirection:"row",gap:10},metricCard:{flex:1,minHeight:112,justifyContent:"space-between"},fourMetrics:{flexDirection:"row",gap:7},tinyMetric:{flex:1,backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:10,padding:10,gap:4},
-    eyebrow:{fontFamily:fonts.sansSemibold,fontSize:10.5,letterSpacing:.75,color:theme.muted},pageTitle:{fontFamily:fonts.sansSemibold,fontSize:26,lineHeight:31,color:theme.ink},cardTitle:{fontFamily:fonts.sansMedium,fontSize:14,lineHeight:19,color:theme.ink},itemTitle:{fontFamily:fonts.sansMedium,fontSize:14,lineHeight:19,color:theme.ink},body:{fontFamily:fonts.sans,fontSize:13,lineHeight:20,color:theme.body},bodyStrong:{fontFamily:fonts.sansSemibold,color:theme.ink},caption:{fontFamily:fonts.sans,fontSize:11.5,lineHeight:17,color:theme.muted},faintCaption:{fontFamily:fonts.sans,fontSize:10.5,lineHeight:15,color:theme.faint},footnote:{fontFamily:fonts.sans,fontSize:10.5,lineHeight:16,color:theme.faint,textAlign:"center",paddingHorizontal:10},monoCaption:{fontFamily:fonts.mono,fontSize:10.5,lineHeight:16,color:theme.muted},monoLarge:{fontFamily:fonts.monoSemibold,fontSize:17,color:theme.ink},monoMetric:{fontFamily:fonts.monoSemibold,fontSize:26,color:theme.ink},monoValue:{fontFamily:fonts.monoSemibold,fontSize:14,color:theme.ink},monoAssessment:{fontFamily:fonts.monoSemibold,fontSize:17,color:theme.ink},monoLink:{fontFamily:fonts.monoSemibold,fontSize:11.5,color:theme.primary},monoTime:{fontFamily:fonts.monoMedium,fontSize:12,color:theme.muted},primaryText:{color:theme.primary},dangerText:{color:theme.danger},successText:{color:theme.success},faintText:{color:theme.faint},emptyInline:{fontFamily:fonts.sans,fontSize:13,lineHeight:19,color:theme.muted,textAlign:"center",paddingVertical:18},
+    eyebrow:{fontFamily:fonts.sansSemibold,fontSize:10.5,letterSpacing:.75,paddingRight:6,flexShrink:0,color:theme.muted},pageTitle:{fontFamily:fonts.sansSemibold,fontSize:26,lineHeight:31,color:theme.ink},cardTitle:{fontFamily:fonts.sansMedium,fontSize:14,lineHeight:19,color:theme.ink},itemTitle:{fontFamily:fonts.sansMedium,fontSize:14,lineHeight:19,color:theme.ink},body:{fontFamily:fonts.sans,fontSize:13,lineHeight:20,color:theme.body},bodyStrong:{fontFamily:fonts.sansSemibold,color:theme.ink},caption:{fontFamily:fonts.sans,fontSize:11.5,lineHeight:17,color:theme.muted},faintCaption:{fontFamily:fonts.sans,fontSize:10.5,lineHeight:15,color:theme.faint},footnote:{fontFamily:fonts.sans,fontSize:10.5,lineHeight:16,color:theme.faint,textAlign:"center",paddingHorizontal:10},monoCaption:{fontFamily:fonts.mono,fontSize:10.5,lineHeight:16,color:theme.muted},monoLarge:{fontFamily:fonts.monoSemibold,fontSize:17,color:theme.ink},monoMetric:{fontFamily:fonts.monoSemibold,fontSize:26,color:theme.ink},monoValue:{fontFamily:fonts.monoSemibold,fontSize:14,color:theme.ink},monoAssessment:{fontFamily:fonts.monoSemibold,fontSize:17,color:theme.ink},monoLink:{fontFamily:fonts.monoSemibold,fontSize:11.5,color:theme.primary},monoTime:{fontFamily:fonts.monoMedium,fontSize:12,color:theme.muted},primaryText:{color:theme.primary},dangerText:{color:theme.danger},successText:{color:theme.success},faintText:{color:theme.faint},emptyInline:{fontFamily:fonts.sans,fontSize:13,lineHeight:19,color:theme.muted,textAlign:"center",paddingVertical:18},
     titleBlock:{gap:2},backHeader:{alignSelf:"flex-start",flexDirection:"row",alignItems:"center",gap:2,minHeight:34},backText:{fontFamily:fonts.sans,fontSize:12,color:theme.primary},
     riskItem:{gap:6,paddingVertical:4},progressTrack:{height:5,borderRadius:3,backgroundColor:theme.surfaceMuted,overflow:"hidden"},progressFill:{height:"100%",borderRadius:3},linkRow:{borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:theme.border,paddingTop:11,marginTop:3,flexDirection:"row",alignItems:"center",gap:8},linkText:{fontFamily:fonts.sansMedium,fontSize:12,color:theme.primary,flex:1},
     denseCourse:{minHeight:62,paddingHorizontal:14,paddingVertical:11,flexDirection:"row",alignItems:"center",gap:12},inlineValues:{flexDirection:"row",alignItems:"center",gap:10},linkCard:{backgroundColor:theme.primarySoft,borderWidth:1,borderColor:theme.dark?theme.border:"#CFE0D7",borderRadius:10,padding:14,flexDirection:"row",justifyContent:"space-between",alignItems:"center"},gradeCourse:{minHeight:68,paddingHorizontal:14,paddingVertical:11,flexDirection:"row",alignItems:"center",gap:10},gradeSide:{alignItems:"flex-end",gap:2},assessmentRow:{minHeight:64,paddingHorizontal:14,paddingVertical:10,flexDirection:"row",alignItems:"center",gap:12},infoBox:{backgroundColor:theme.primarySoft,borderWidth:1,borderColor:theme.border,borderRadius:10,padding:14,gap:7},riskSurface:{borderColor:theme.danger,backgroundColor:theme.dangerSoft},simpleRow:{minHeight:50,paddingHorizontal:14,paddingVertical:10,flexDirection:"row",justifyContent:"space-between",alignItems:"center",gap:12},absenceDates:{borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:theme.border,paddingTop:8,gap:3},

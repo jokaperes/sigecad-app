@@ -134,6 +134,23 @@ await check("login começa no CAS e só conecta depois do SIGECAD", () => {
   assert(source.includes("onOpenWindow={onOpenWindow}"));
   assert(source.includes("Entrando no SIGECAD"));
   assert(source.includes("A sessão fica só neste aparelho"));
+  assert(source.includes('loginBrandText}>SIGECAD</Text>'));
+  assert(source.includes("loginBrandText: { color: \"#17201C\", fontFamily: fonts.monoSemibold, fontSize: 15, letterSpacing: 0.8, paddingRight: 6, flexShrink: 0 }"));
+});
+
+await check("letterSpacing no Android não corta a última letra", () => {
+  const design = readFileSync(designSourcePath, "utf8");
+  const ui = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../src/ui/components.tsx"), "utf8");
+  const session = readFileSync(portalSessionSourcePath, "utf8");
+  for (const blob of [design, ui, session]) {
+    const hits = blob.match(/letterSpacing:[^,}]+/g) || [];
+    for (const hit of hits) {
+      const blockStart = blob.lastIndexOf("{", blob.indexOf(hit));
+      const block = blob.slice(blockStart, blob.indexOf("}", blockStart) + 1);
+      assert(block.includes("paddingRight"), `letterSpacing sem paddingRight: ${hit}`);
+    }
+  }
+  assert(design.includes('logoSmall}>SIGECAD</Text>'));
 });
 
 await check("sessão reutiliza períodos e instala cada bridge uma vez por página", () => {
