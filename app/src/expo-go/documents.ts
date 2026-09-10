@@ -77,6 +77,12 @@ export type DocumentBridgeMessage =
     id: string;
     type: "error";
     error: "auth" | "unavailable" | "invalid" | "too-large" | "network";
+  }
+  | {
+    channel: typeof DOCUMENT_BRIDGE_CHANNEL;
+    id: string;
+    type: "signed-url";
+    url: string;
   };
 
 export function parseDocumentCatalog(value: unknown): AcademicDocumentCatalog {
@@ -165,6 +171,9 @@ export function parseDocumentBridgeMessage(raw: string): DocumentBridgeMessage |
     ["auth", "unavailable", "invalid", "too-large", "network"].includes(item.error)) {
     return item as unknown as DocumentBridgeMessage;
   }
+  if (item.type === "signed-url" && typeof item.url === "string" && isAllowedSignedDocumentUrl(item.url)) {
+    return { channel: DOCUMENT_BRIDGE_CHANNEL, id: item.id, type: "signed-url", url: item.url };
+  }
   return null;
 }
 
@@ -204,7 +213,7 @@ export async function cleanupAcademicDocumentCache(): Promise<void> {
     const names = await FileSystem.readDirectoryAsync(root);
     await Promise.all(names.filter((name) => /^[a-z-]+-[0-9]+-[a-z0-9]+\.pdf$/.test(name))
       .map((name) => FileSystem.deleteAsync(`${root}${name}`, { idempotent: true })));
-  } catch {  }
+  } catch { /* Cache cleanup is best-effort and never blocks login. */ }
 }
 
 export async function shareAcademicDocument(

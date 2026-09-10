@@ -94,10 +94,14 @@ export function parseBridgeResponse(raw: string): BridgeResponse {
   };
 }
 
-
+/**
+ * Static code injected only after the WebView reaches the authenticated SIGECAD
+ * origin. It accepts a closed set of read-only operations and never exposes
+ * document.cookie. Numeric IDs always come from the authenticated session.
+ */
 export const BRIDGE_BOOTSTRAP = `
 (function () {
-  if (window.__SIGECAD_BRIDGE_VERSION__ === 4 && window.__SIGECAD_REQUEST__ &&
+  if (window.__SIGECAD_BRIDGE_VERSION__ === 5 && window.__SIGECAD_REQUEST__ &&
     window.__SIGECAD_DOCUMENT__) return true;
   var CHANNEL = ${JSON.stringify(BRIDGE_CHANNEL)};
   var DOCUMENT_CHANNEL = ${JSON.stringify(DOCUMENT_BRIDGE_CHANNEL)};
@@ -341,26 +345,59 @@ export const BRIDGE_BOOTSTRAP = `
       if (!planPath) throw new Error("UNAVAILABLE");
       path = planPath;
     }
-    var response = await getRelative(path, "application/pdf, text/html;q=0.8, **;q=0.2");
+    var response = await getRelative(path, "application/pdf, text/html;q=0.8, */*;q=0.2");
+    var contentType = String(response.headers.get("content-type") || "").toLowerCase();
+    if (contentType.indexOf("text/html") >= 0 || contentType.indexOf("application/xhtml") >= 0) {
+      var html = await response.text();
+      var nested = candidateFromHtml(html, request.kind === "teaching-plan" ? request.planId : null);
+      if (!nested) throw new Error("UNAVAILABLE");
+      response = await getRelative(nested, "application/pdf, */*;q=0.2");
     }
     var announced = Number(response.headers.get("content-length"));
     if (Number.isFinite(announced) && announced > MAX_DOCUMENT_BYTES) throw new Error("SIZE");
     return response;
   }
-  function beginSignedDocumentNavigation(request) {
+  function isSignedWebdoc(value) {
+    try {
+      var url = new URL(value);
+      if (url.protocol !== "https:" || url.hostname !== "webdoc.app.ufgd.edu.br" || url.pathname !== "/gerar") return false;
+      var keys = Array.prototype.slice.call(url.searchParams.keys()).sort();
+      if (keys.join(",") !== "documento,hash") return false;
+      var documento = url.searchParams.get("documento") || "";
+      var hash = url.searchParams.get("hash") || "";
+      return documento.length >= 8 && documento.length <= 40 && /^[A-Za-z0-9_-]+$/.test(documento) &&
+        /^[a-f0-9]{32}$/i.test(hash);
+    } catch (_) { return false; }
+  }
+  function signedDocumentPath(request) {
     if (!documentLinks) scanDocumentLinks();
     if (request.kind === "teaching-plan") {
       if (!Number.isSafeInteger(request.planId) || !teachingPlanIds.has(request.planId)) {
         throw new Error("PLAN");
       }
-      window.location.assign("/graduacao/relatorios/planoensino?peID=" + request.planId);
-      return;
+      return "/graduacao/relatorios/planoensino?peID=" + request.planId;
     }
     var target = request.kind === "enrollment-certificate"
       ? documentLinks.enrollmentCertificate
       : documentLinks.schoolTranscript;
     if (!target || !target.available || !target.path) throw new Error("UNAVAILABLE");
-    window.location.assign(withNameMode(target.path, target.supportsSocialName, request.nameMode));
+    return withNameMode(target.path, target.supportsSocialName, request.nameMode);
+  }
+  async function captureSignedDocument(request) {
+    var path = signedDocumentPath(request);
+    try {
+      var response = await fetch(path, {
+        method: "GET",
+        credentials: "include",
+        redirect: "follow",
+        headers: { Accept: "application/pdf, */*;q=0.2" }
+      });
+      if (isSignedWebdoc(response.url)) {
+        sendDocument({ id: request.id, type: "signed-url", url: response.url });
+        return;
+      }
+    } catch (_) {}
+    window.location.assign(path);
   }
   function base64Of(bytes) {
     var binary = "";
@@ -376,7 +413,7 @@ export const BRIDGE_BOOTSTRAP = `
     try {
       if (request.kind === "enrollment-certificate" || request.kind === "school-transcript" ||
         request.kind === "teaching-plan") {
-        beginSignedDocumentNavigation(request);
+        await captureSignedDocument(request);
         return;
       }
       var response = await resolveDocumentResponse(request);
@@ -401,21 +438,30 @@ export const BRIDGE_BOOTSTRAP = `
       sendDocument({ id: request.id, type: "error", error: code });
     }
   };
-  window.__SIGECAD_BRIDGE_VERSION__ = 4;
+  window.__SIGECAD_BRIDGE_VERSION__ = 5;
   return true;
 })();
 true;
 `;
 
-
+/**
+ * Bridge for the separate Card UFGD origin. IDs and hashes are discovered only
+ * from the authenticated user's own page; the caller cannot supply either.
+ * Photo, barcode value, balances and transactions are returned in memory and
+ * never persisted.
+ */
 export const CARD_BRIDGE_BOOTSTRAP = `
 (function () {
   if (window.__SIGECAD_REQUEST__) return true;
   var CHANNEL = ${JSON.stringify(BRIDGE_CHANNEL)};
   var PERF_CHANNEL = ${JSON.stringify(BRIDGE_PERF_CHANNEL)};
   var MAX_TEXT = 1200000;
+  // Keeps the base64 response below the 1.5 MB native bridge envelope while
+  // allowing a materially sharper source than the former 650 KB ceiling.
   var MAX_PHOTO_BYTES = 900000;
   var ORIGIN = "https://cartao.app.ufgd.edu.br";
+  // Used exactly once to avoid repeating the discovery/status/balance GETs
+  // between the priority summary and the immediately following full card load.
   var summaryContext = null;
   var summaryContextTimer = null;
   function send(payload) {
@@ -642,8 +688,11 @@ export const CARD_BRIDGE_BOOTSTRAP = `
     if (locationUrl.origin !== ORIGIN || !/^\\/cartoes_usuario\\/visualiza_pessoa\\/?$/.test(locationUrl.pathname)) {
       throw new Error("ORIGIN");
     }
+    // ensureOrigin already loaded this authenticated page; do not GET it twice.
     var person = document;
     perf("cartao-pessoa");
+    // The origin handshake deliberately runs before page assets finish. Wait
+    // only for the card anchor so we do not race the still-parsing HTML.
     var link = await waitForCardLink(person);
     if (!link) throw new Error("CARD");
     var parts = link.match(/^\\/cartoes_usuario\\/visualiza_estatus\\/(\\d+)\\/([A-Fa-f0-9]{8,128})$/);
@@ -653,6 +702,8 @@ export const CARD_BRIDGE_BOOTSTRAP = `
     var resourceHash = parts[2];
     var ruPath = "/cartoes_usuario/listagem_extrato_ru/" + statusId + "/" + resourceHash;
     var canteenPath = "/cartoes_usuario/listagem_extrato_cantina/" + statusId + "/" + resourceHash;
+    // This page occasionally returns 5xx while its dedicated balance/extract
+    // routes still work. Auth/origin errors remain fatal in optionalChecked.
     var statusText = await optionalChecked(link, false, "");
     var statusDoc = documentOf(statusText);
     perf(statusText ? "cartao-status" : "cartao-status-fallback");

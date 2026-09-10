@@ -59,7 +59,7 @@ const CAS_URL =
 const REQUEST_TIMEOUT_MS = 15_000;
 const DOCUMENT_TIMEOUT_MS = 45_000;
 const PERIOD_CACHE_TTL_MS = 5 * 60_000;
-const ACADEMIC_BRIDGE_REVISION = "academic-v4";
+const ACADEMIC_BRIDGE_REVISION = "academic-v5";
 const CARD_BRIDGE_REVISION = "card-v1";
 const NAV_READY_CHANNEL = "sigecad-nav-ready-v1";
 const NAV_READY_SCRIPT = `
@@ -138,6 +138,7 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   // The CAS must be the first page in the same WebView that later hosts the
   // academic portal. This keeps the UFGDNET cookie in the WebView's jar.
   const [browserUri, setBrowserUri] = useState(CAS_URL);
+  const [documentSurface, setDocumentSurface] = useState(false);
 
   useEffect(() => {
     // Cleanup is best-effort. Delay the lazily loaded filesystem module so its
@@ -346,9 +347,15 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
 
   const shareDocument = useCallback((input: AcademicDocumentRequest) => {
     const result = operationQueue.current.then(async () => {
-      await ensureOrigin(SIGECAD_ORIGIN);
-      const base64 = await injectDocumentRequest(input);
-      if (base64 !== null) await shareAcademicDocument(input.kind, base64);
+      setDocumentSurface(true);
+      await new Promise<void>((resolve) => setTimeout(resolve, 80));
+      try {
+        await ensureOrigin(SIGECAD_ORIGIN);
+        const base64 = await injectDocumentRequest(input);
+        if (base64 !== null) await shareAcademicDocument(input.kind, base64);
+      } finally {
+        setDocumentSurface(false);
+      }
     });
     operationQueue.current = result.then(() => undefined, () => undefined);
     return result;
@@ -543,6 +550,17 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       item.receivedBytes += decoded;
       return;
     }
+    if (message.type === "signed-url") {
+      clearTimeout(item.timeout);
+      pendingDocuments.current.delete(message.id);
+      void shareSignedAcademicDocument(item.kind, message.url)
+        .then(() => item.resolve(null))
+        .catch(() => item.reject(new PortalBridgeError(
+          "Não foi possível preparar o PDF oficial da UFGD.",
+          "invalid-response",
+        )));
+      return;
+    }
     if (item.expectedBytes === null || item.expectedChunks === null ||
       item.chunks.length !== item.expectedChunks || item.receivedBytes !== item.expectedBytes) {
       failDocument(message.id, item);
@@ -559,34 +577,35 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     item.reject(new PortalBridgeError("Transferência de documento inválida.", "protocol"));
   }
 
+  function consumeSignedDocumentUrl(url: string): boolean {
+    if (!isAllowedSignedDocumentUrl(url)) return false;
+    const match = [...pendingDocuments.current.entries()].find(([, item]) =>
+      item.kind === "enrollment-certificate" || item.kind === "school-transcript" ||
+      item.kind === "teaching-plan");
+    if (match) {
+      const [id, item] = match;
+      clearTimeout(item.timeout);
+      pendingDocuments.current.delete(id);
+      if (__DEV__) console.info("[SIGECAD documento] redirect-assinado");
+      void shareSignedAcademicDocument(item.kind, url)
+        .then(() => {
+          if (__DEV__) console.info("[SIGECAD documento] folha-concluida");
+          item.resolve(null);
+        })
+        .catch(() => {
+          if (__DEV__) console.info("[SIGECAD documento] falha-validacao");
+          item.reject(new PortalBridgeError(
+            "Não foi possível preparar o PDF oficial da UFGD.",
+            "invalid-response",
+          ));
+        });
+    }
+    return true;
+  }
+
   function onShouldStartLoad(requestValue: { url: string }): boolean {
     const { url } = requestValue;
-    if (isAllowedSignedDocumentUrl(url)) {
-      const match = [...pendingDocuments.current.entries()].find(([, item]) =>
-        item.kind === "enrollment-certificate" || item.kind === "school-transcript" ||
-        item.kind === "teaching-plan");
-      if (match) {
-        const [id, item] = match;
-        clearTimeout(item.timeout);
-        pendingDocuments.current.delete(id);
-        if (__DEV__) console.info("[SIGECAD documento] redirect-assinado");
-        void shareSignedAcademicDocument(item.kind, url)
-          .then(() => {
-            if (__DEV__) console.info("[SIGECAD documento] folha-concluida");
-            item.resolve(null);
-          })
-          .catch(() => {
-            if (__DEV__) console.info("[SIGECAD documento] falha-validacao");
-            item.reject(new PortalBridgeError(
-              "Não foi possível preparar o PDF oficial da UFGD.",
-              "invalid-response",
-            ));
-          });
-      }
-      // The signed Webdoc URL is consumed only by the temporary native download;
-      // never navigate the session WebView to it or expose it to the UI.
-      return false;
-    }
+    if (consumeSignedDocumentUrl(url)) return false;
     if (safeHttpsOrigin(url) === WEBDOC_ORIGIN) return false;
     return isAllowedSessionUrl(url);
   }
@@ -600,8 +619,9 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   const showContent = ready || phase === "expired" || phase === "offline";
   const showLoginChrome = phase === "login" || phase === "error";
   const coveringPortal = phase === "connecting";
+  const liveDocumentSurface = showContent && documentSurface;
   const hiddenBrowserStyle = Platform.OS === "android"
-    ? styles.hiddenBrowserAndroid
+    ? (liveDocumentSurface ? styles.documentBrowserAndroid : styles.hiddenBrowserAndroid)
     : styles.hiddenBrowser;
   return (
     <PortalSessionContext.Provider value={value}>
@@ -678,7 +698,7 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
             </View>
           )}
           onShouldStartLoadWithRequest={onShouldStartLoad}
-          onFileDownload={() => undefined}
+          onFileDownload={(event) => { consumeSignedDocumentUrl(event.nativeEvent.downloadUrl); }}
         />
         {coveringPortal ? (
           <View style={styles.connectingOverlay} pointerEvents="auto">
@@ -686,6 +706,15 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
             <Text style={styles.connectingTitle}>Entrando no SIGECAD…</Text>
             <Text style={styles.connectingCopy}>
               A sessão fica só neste aparelho. O app não vê sua senha.
+            </Text>
+          </View>
+        ) : null}
+        {liveDocumentSurface ? (
+          <View style={styles.connectingOverlay} pointerEvents="auto">
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.connectingTitle}>Preparando o PDF oficial…</Text>
+            <Text style={styles.connectingCopy}>
+              O arquivo fica só neste aparelho, só enquanto você compartilha ou salva.
             </Text>
           </View>
         ) : null}
@@ -794,6 +823,9 @@ const styles = StyleSheet.create({
   // transparent and outside the viewport. Keep a drawable 2 px surface behind
   // the native dashboard; z-index + pointerEvents prevent visual/touch overlap.
   hiddenBrowserAndroid: { position: "absolute", width: 2, height: 2, left: 0, bottom: 0, opacity: 0.01, zIndex: 0 },
+  // Cross-origin redirect to Webdoc is deferred on the 2×2 surface. Expand
+  // behind an overlay only while a PDF is being prepared.
+  documentBrowserAndroid: { ...StyleSheet.absoluteFill, opacity: 0.02, zIndex: 0 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm },
   expiredOverlay: {
     ...StyleSheet.absoluteFill,
