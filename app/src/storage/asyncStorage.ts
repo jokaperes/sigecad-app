@@ -1,6 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Items } from "../core/types";
-import type { CycleStorage, TurmaState } from "../sentinel/cycle";
 
 const REGISTRATION_KEY = "app:registration:v1";
 const PREVIEW_STATE_KEY = "app:expo-go-preview:v1";
@@ -31,16 +30,6 @@ export interface PreviewState {
   checkedAt: string;
 }
 
-
-export const storage: CycleStorage = {
-  async getTurmaState(code) {
-    const raw = await AsyncStorage.getItem(`turma:${code}`);
-    return raw ? (JSON.parse(raw) as TurmaState) : null;
-  },
-  async setTurmaState(code, state) {
-    await AsyncStorage.setItem(`turma:${code}`, JSON.stringify(state));
-  },
-};
 
 export async function getRegistration(): Promise<Registration | null> {
   const raw = await AsyncStorage.getItem(REGISTRATION_KEY);
