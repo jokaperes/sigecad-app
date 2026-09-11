@@ -31,11 +31,13 @@ import {
   SIGECAD_ORIGIN,
   WEBDOC_ORIGIN,
   WEBVIEW_ORIGIN_WHITELIST,
+  KEEP_SESSION_NAVIGATION_SCRIPT,
   isAllowedSessionUrl,
   isBridgeUrl,
   isLoginUrl,
   isStableAcademicUrl,
   hasCasServiceTicket,
+  rewriteSessionNavigationUrl,
   safeHttpsOrigin,
 } from "./origins";
 import type { PortalBatchItem, PortalBatchRequest } from "./client";
@@ -63,6 +65,7 @@ const ACADEMIC_BRIDGE_REVISION = "academic-v5";
 const CARD_BRIDGE_REVISION = "card-v1";
 const NAV_READY_CHANNEL = "sigecad-nav-ready-v1";
 const NAV_READY_SCRIPT = `
+${KEEP_SESSION_NAVIGATION_SCRIPT}
 (function () {
   try {
     var origin = window.location.origin;
@@ -453,9 +456,17 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     markOriginReady(url);
   }
 
+  function loadSessionUrlInsideApp(url: string) {
+    coverAcademicNavigation(url);
+    if (browserUri === url) webView.current?.reload();
+    else setBrowserUri(url);
+  }
+
   function onOpenWindow(event: { nativeEvent: { targetUrl: string } }) {
-    const url = event.nativeEvent.targetUrl;
-    if (isAllowedSessionUrl(url)) setBrowserUri(url);
+    const requestedUrl = event.nativeEvent.targetUrl;
+    const url = rewriteSessionNavigationUrl(requestedUrl) ?? requestedUrl;
+    if (!isAllowedSessionUrl(url)) return;
+    loadSessionUrlInsideApp(url);
   }
 
   function onMessage(event: WebViewMessageEvent) {
@@ -605,6 +616,12 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
 
   function onShouldStartLoad(requestValue: { url: string }): boolean {
     const { url } = requestValue;
+    const rewrittenUrl = rewriteSessionNavigationUrl(url);
+    if (rewrittenUrl) {
+      loadSessionUrlInsideApp(rewrittenUrl);
+      return false;
+    }
+    coverAcademicNavigation(url);
     if (consumeSignedDocumentUrl(url)) return false;
     if (safeHttpsOrigin(url) === WEBDOC_ORIGIN) return false;
     return isAllowedSessionUrl(url);
@@ -792,7 +809,7 @@ const styles = StyleSheet.create({
   connecting: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   connectingText: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13 },
   connectingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 2,
     backgroundColor: colors.background,
     alignItems: "center",
@@ -815,7 +832,7 @@ const styles = StyleSheet.create({
   browser: { flex: 1, backgroundColor: colors.surface },
   // WKWebView may suspend navigation/network when reduced to 1×1 and fully
   // transparent. Keep a laid-out, non-interactive surface behind the app.
-  hiddenBrowser: { ...StyleSheet.absoluteFillObject, opacity: 0.01, zIndex: 0 },
+  hiddenBrowser: { ...StyleSheet.absoluteFill, opacity: 0.01, zIndex: 0 },
   // Android's native WebView may intercept hardware taps even with
   // pointerEvents="none". It continues bridge fetches in this tiny off-screen
   // surface, while the dashboard owns the entire interactive area.
@@ -825,10 +842,10 @@ const styles = StyleSheet.create({
   hiddenBrowserAndroid: { position: "absolute", width: 2, height: 2, left: 0, bottom: 0, opacity: 0.01, zIndex: 0 },
   // Cross-origin redirect to Webdoc is deferred on the 2×2 surface. Expand
   // behind an overlay only while a PDF is being prepared.
-  documentBrowserAndroid: { ...StyleSheet.absoluteFillObject, opacity: 0.02, zIndex: 0 },
+  documentBrowserAndroid: { ...StyleSheet.absoluteFill, opacity: 0.02, zIndex: 0 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm },
   expiredOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 2,
     backgroundColor: "rgba(23,32,28,0.25)",
     justifyContent: "flex-end",
