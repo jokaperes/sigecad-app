@@ -29,7 +29,7 @@ import {
 } from "../src/expo-go/documents";
 import { courseDisplayValue, formatAcademicName, formatCourseName, formatPersonName, formatScheduleRoom, formatScheduleSlot, hasPublishedValue, nextClassContext, publishedAssessmentsCount } from "../src/expo-go/design/format";
 import { currentSchedule, nextSchedule } from "../src/expo-go/design/schedule";
-import { emptyPortalData, loadPortalData, portalDataFromStartup, resolveCourseProgress } from "../src/expo-go/portalData";
+import { emptyPortalData, loadPortalData, matchesCourseType, officialAveragesByType, portalDataFromStartup, resolveCourseProgress } from "../src/expo-go/portalData";
 import { detectRuntimeMode } from "../src/runtime/detect";
 import { DataValidationError, parseNotas, parsePeriodos, parseTurmas } from "../src/expo-go/validation";
 
@@ -235,6 +235,31 @@ await check("planos são agrupados com semestre atual primeiro", () => {
   assert(ordered.map((section) => section.periodName).join(",") === "2026/1,2026/2,2025/2,2025/1");
 });
 
+await check("histórico expõe tipo da disciplina e ignora conceito na média oficial", () => {
+  assert(BRIDGE_BOOTSTRAP.includes('"tipo_disciplina", "avaliacao"'));
+  assert(matchesCourseType("OBRIGATÓRIA", "OBR"));
+  assert(matchesCourseType("optativa", "OPT"));
+  assert(matchesCourseType("ELT", "ELT"));
+  assert(matchesCourseType("LEG", "all"));
+  assert(!matchesCourseType("OPT", "OBR"));
+  const averages = officialAveragesByType([
+    { id: 1, term: "2025/1", code: "A", name: "A", hours: 72, grade: 8, result: "AP", absences: 0, type: "OBR", evaluation: "nota" },
+    { id: 2, term: "2025/1", code: "B", name: "B", hours: 72, grade: 6, result: "AP", absences: 0, type: "OBR", evaluation: "nota" },
+    { id: 3, term: "2025/1", code: "C", name: "C", hours: 72, grade: 10, result: "AP", absences: 0, type: "OPT", evaluation: "nota" },
+    { id: 4, term: "2025/1", code: "D", name: "D", hours: 144, grade: 0, result: "AP", absences: 0, type: "OBR", evaluation: "conceito" },
+    { id: 5, term: "2025/1", code: "E", name: "E", hours: 72, grade: 9.1, result: "AP", absences: 0, type: "ELT", evaluation: "nota" },
+  ]);
+  assert(averages.map((item) => `${item.type}:${item.average}:${item.count}`).join(",") === "OBR:7:2,OPT:10:1,ELT:9.1:1");
+});
+
+await check("planos de ensino antigos não carregam na abertura da tela", () => {
+  const design = readFileSync(designSourcePath, "utf8");
+  assert(design.includes("pendingPlanPeriods"));
+  assert(design.includes("onEndReached"));
+  assert(design.includes("Mais semestres"));
+  assert(!design.includes("offset += 4"));
+});
+
 await check("comando de PDF não aceita caminho, ID ou plano injetável", () => {
   const command = buildDocumentBridgeCommand("doc-7", {
     kind: "teaching-plan", planId: 17, nameMode: "civil",
@@ -338,8 +363,10 @@ await check("Documentos não cancelam a própria carga e consultam em um lote", 
   assert(source.includes("const plansAvailability: DocumentAvailability = totalPlans"));
   assert(source.includes("<SectionList"));
   assert(source.includes('section.current ? " · ATUAL"'));
-  assert(source.includes("offset += 4"));
-  assert(source.includes("await nextFrame()"));
+  assert(source.includes("pendingPlanPeriods"));
+  assert(source.includes("onEndReached"));
+  assert(!source.includes("offset += 4"));
+  assert(!source.includes("await nextFrame()"));
   assert(source.includes('reportLoadTiming("documents-current"'));
   assert(source.includes('reportLoadTiming("documents-complete"'));
 });

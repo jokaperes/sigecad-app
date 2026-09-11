@@ -199,7 +199,7 @@ export const BRIDGE_BOOTSTRAP = `
       return data.slice(0, 100).map(function (term) {
         return {
           ano_semestre: term && term.ano_semestre,
-          historico: pickedRows(term && term.historico, 100, ["id", "ano", "semestre", "ch_total", "faltas", "resultado", "nota", "codigo_disciplina", "nome_disciplina"])
+          historico: pickedRows(term && term.historico, 100, ["id", "ano", "semestre", "ch_total", "faltas", "resultado", "nota", "codigo_disciplina", "nome_disciplina", "tipo_disciplina", "avaliacao"])
         };
       });
     }

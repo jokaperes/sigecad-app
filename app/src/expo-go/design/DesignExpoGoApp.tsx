@@ -78,10 +78,13 @@ import {
   courseKey,
   emptyPortalData,
   loadPortalExtras,
+  matchesCourseType,
+  officialAveragesByType,
   portalDataFromStartup,
   resolveCourseProgress,
   type AbsenceEntry,
   type AcademicProfile,
+  type CourseTypeFilter,
   type CurriculumCourse,
   type EnrollmentEntry,
   type HistoryCourse,
@@ -152,9 +155,13 @@ function DesignDashboard() {
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [sharingDocument, setSharingDocument] = useState<string | null>(null);
+  const [morePlansAvailable, setMorePlansAvailable] = useState(false);
+  const [loadingMorePlans, setLoadingMorePlans] = useState(false);
   const refreshGeneration = useRef(0);
   const refreshBusy = useRef(false);
   const studentCardRef = useRef<StudentCard | null>(null);
+  const pendingPlanPeriods = useRef<Periodo[]>([]);
+  const loadMorePlansBusy = useRef(false);
 
   const dark = preferences.theme === "dark" ||
     (preferences.theme === "system" && systemScheme === "dark");
@@ -208,39 +215,8 @@ function DesignDashboard() {
         } catch { partial = true; }
       } else partial = true;
 
-      const previousPeriods = periods.filter((period) => period.id !== overview.period.id);
-      for (let offset = 0; offset < previousPeriods.length; offset += 4) {
-        const periodBatch = previousPeriods.slice(offset, offset + 4);
-        const previousResults = await requestBatch(periodBatch.map((period) => ({
-          kind: "planosensino" as const,
-          numericId: period.id,
-        })));
-        if (!active) return;
-        const batchSections: TeachingPlanSection[] = [];
-        previousResults.forEach((result, index) => {
-          if (result.status === "rejected") {
-            partial = true;
-            return;
-          }
-          try {
-            const plans = parseTeachingPlans(result.value);
-            if (plans.length) {
-              const period = periodBatch[index];
-              batchSections.push({
-                periodId: period.id,
-                periodName: period.nome,
-                current: false,
-                plans,
-              });
-            }
-          } catch { partial = true; }
-        });
-        setTeachingPlanSections((current) => orderTeachingPlanSections(
-          [...current, ...batchSections],
-          overview.period.id,
-        ));
-        await nextFrame();
-      }
+      pendingPlanPeriods.current = periods.filter((period) => period.id !== overview.period.id);
+      setMorePlansAvailable(pendingPlanPeriods.current.length > 0);
       setDocumentError(partial ? "Alguns documentos não puderam ser consultados agora." : null);
       setDocumentsLoaded(true);
       reportLoadTiming("documents-complete", documentsStartedAt);
@@ -249,6 +225,41 @@ function DesignDashboard() {
     }).finally(() => { if (active) setDocumentsLoading(false); });
     return () => { active = false; };
   }, [documentsLoaded, overview, requestBatch, route]);
+
+  const loadMoreTeachingPlans = useCallback(async () => {
+    if (!overview || loadMorePlansBusy.current || !pendingPlanPeriods.current.length) return;
+    loadMorePlansBusy.current = true;
+    setLoadingMorePlans(true);
+    try {
+      let added = 0;
+      while (added === 0 && pendingPlanPeriods.current.length) {
+        const period = pendingPlanPeriods.current.shift();
+        if (!period) break;
+        const [result] = await requestBatch([{ kind: "planosensino", numericId: period.id }]);
+        if (result.status === "rejected") continue;
+        try {
+          const plans = parseTeachingPlans(result.value);
+          if (!plans.length) continue;
+          setTeachingPlanSections((current) => orderTeachingPlanSections(
+            [...current, {
+              periodId: period.id,
+              periodName: period.nome,
+              current: false,
+              plans,
+            }],
+            overview.period.id,
+          ));
+          added += 1;
+        } catch {
+          continue;
+        }
+      }
+      setMorePlansAvailable(pendingPlanPeriods.current.length > 0);
+    } finally {
+      loadMorePlansBusy.current = false;
+      setLoadingMorePlans(false);
+    }
+  }, [overview, requestBatch]);
 
   const updatePreferences = useCallback((patch: Partial<DesignPreferences>) => {
     setPreferences((current) => {
@@ -443,6 +454,9 @@ function DesignDashboard() {
           loading={documentsLoading}
           error={documentError}
           sharingKey={sharingDocument}
+          hasMore={morePlansAvailable}
+          loadingMore={loadingMorePlans}
+          onLoadMore={() => void loadMoreTeachingPlans()}
           onShare={confirmAndShareDocument}
           theme={theme}
           styles={styles}
@@ -910,12 +924,15 @@ function ProfileScreen({ card, profile, portal, preferences, theme, styles, mess
   );
 }
 
-function DocumentsScreen({ catalog, sections, loading, error, sharingKey, onShare, theme, styles, back, bottomInset }: ScreenProps & {
+function DocumentsScreen({ catalog, sections, loading, error, sharingKey, hasMore, loadingMore, onLoadMore, onShare, theme, styles, back, bottomInset }: ScreenProps & {
   catalog: AcademicDocumentCatalog | null;
   sections: TeachingPlanSection[];
   loading: boolean;
   error: string | null;
   sharingKey: string | null;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore(): void;
   onShare(
     key: string,
     request: Omit<AcademicDocumentRequest, "nameMode">,
@@ -984,7 +1001,6 @@ function DocumentsScreen({ catalog, sections, loading, error, sharingKey, onShar
       </Surface>
       <View style={styles.documentSectionTitle}>
         <Eyebrow styles={styles}>PLANOS DE ENSINO · {totalPlans}</Eyebrow>
-        <Text style={styles.caption}>Organizados por semestre, com o período atual primeiro.</Text>
       </View>
       {!loading && catalog && !plansAvailability.available ? (
         <InlineNotice text="A UFGD não disponibilizou planos de ensino para este período." styles={styles} />
@@ -1043,12 +1059,26 @@ function DocumentsScreen({ catalog, sections, loading, error, sharingKey, onShar
           styles={styles}
         />
       ) : null}
+      ListFooterComponent={hasMore || loadingMore ? (
+        <Pressable
+          accessibilityRole="button"
+          disabled={loadingMore}
+          onPress={onLoadMore}
+          style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}
+        >
+          {loadingMore
+            ? <ActivityIndicator size="small" color={theme.primary} />
+            : <Text style={styles.secondaryActionText}>Mais semestres</Text>}
+        </Pressable>
+      ) : null}
+      onEndReached={() => { if (hasMore && !loadingMore) onLoadMore(); }}
+      onEndReachedThreshold={0.4}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       stickySectionHeadersEnabled={false}
-      initialNumToRender={10}
-      maxToRenderPerBatch={8}
-      windowSize={7}
+      initialNumToRender={8}
+      maxToRenderPerBatch={6}
+      windowSize={5}
     />
   );
 }
@@ -1113,26 +1143,46 @@ function DiagnosticsScreen({ overview, card, portal, cardUnavailable, detailsLoa
 }
 
 function HistoryScreen({ portal, loading, theme, styles, back }: ScreenProps & { portal: PortalData; loading: boolean; back(): void }) {
-  const groups = useMemo(() => groupHistory(portal.history), [portal.history]);
+  const [typeFilter, setTypeFilter] = useState<CourseTypeFilter>("all");
+  const averages = useMemo(() => officialAveragesByType(portal.history), [portal.history]);
+  const groups = useMemo(
+    () => groupHistory(portal.history.filter((course) => matchesCourseType(course.type, typeFilter))),
+    [portal.history, typeFilter],
+  );
   return (
     <View style={styles.page}>
       <BackHeader label="Perfil" onPress={back} theme={theme} styles={styles} />
       <TitleBlock title="Histórico" subtitle={workloadLine(portal)} styles={styles} />
+      <TypeFilter value={typeFilter} onChange={setTypeFilter} styles={styles} />
+      {averages.length ? (
+        <View style={styles.fourMetrics}>
+          {averages.map((item) => (
+            <TinyMetric key={item.type} label={item.label} value={formatGrade(item.average)} styles={styles} />
+          ))}
+        </View>
+      ) : null}
       {groups.length ? groups.map(([term, courses]) => (
         <View key={term} style={styles.sectionGap}><Eyebrow styles={styles}>{term}</Eyebrow><Surface styles={styles} style={styles.listSurface}>{courses.map((course, index) => <HistoryRow key={course.id} course={course} index={index} styles={styles} />)}</Surface></View>
-      )) : loading ? <LoadingNotice label="Carregando histórico" theme={theme} styles={styles} /> : <EmptyState label="Histórico indisponível nesta sessão." styles={styles} />}
+      )) : loading ? <LoadingNotice label="Carregando histórico" theme={theme} styles={styles} /> : <EmptyState label={portal.history.length ? "Nenhuma disciplina neste filtro." : "Histórico indisponível nesta sessão."} styles={styles} />}
     </View>
   );
 }
 
 function CurriculumScreen({ portal, loading, theme, styles, back }: ScreenProps & { portal: PortalData; loading: boolean; back(): void }) {
-  const semesters = useMemo(() => chunk(portal.curriculum, 6), [portal.curriculum]);
+  const [typeFilter, setTypeFilter] = useState<CourseTypeFilter>("all");
+  const semesters = useMemo(
+    () => chunk(portal.curriculum, 6)
+      .map((courses, index) => ({ index, courses: courses.filter((course) => matchesCourseType(course.type, typeFilter)) }))
+      .filter((section) => section.courses.length),
+    [portal.curriculum, typeFilter],
+  );
   return (
     <View style={styles.page}>
       <BackHeader label="Perfil" onPress={back} theme={theme} styles={styles} />
       <TitleBlock title="Grade do curso" subtitle={`${formatCourseName(portal.profile?.course) ?? "Estrutura curricular"}${portal.profile?.structure ? ` · ${portal.profile.structure}` : ""}`} styles={styles} />
+      <TypeFilter value={typeFilter} onChange={setTypeFilter} styles={styles} />
       <View style={styles.legend}><Legend color={theme.success} label="Cursada" styles={styles} /><Legend color={theme.primary} label="Cursando" styles={styles} /><Legend color={theme.border} label="Pendente" styles={styles} /></View>
-      {semesters.length ? semesters.map((courses, index) => <CurriculumSemester key={index} index={index} courses={courses} theme={theme} styles={styles} />) : loading ? <LoadingNotice label="Carregando estrutura curricular" theme={theme} styles={styles} /> : <EmptyState label="Estrutura curricular indisponível nesta sessão." styles={styles} />}
+      {semesters.length ? semesters.map((section) => <CurriculumSemester key={section.index} index={section.index} courses={section.courses} theme={theme} styles={styles} />) : loading ? <LoadingNotice label="Carregando estrutura curricular" theme={theme} styles={styles} /> : <EmptyState label={portal.curriculum.length ? "Nenhuma disciplina neste filtro." : "Estrutura curricular indisponível nesta sessão."} styles={styles} />}
       {portal.workload ? <Surface styles={styles}><Eyebrow styles={styles}>CARGA HORÁRIA</Eyebrow><WorkloadLine label="Obrigatória" done={portal.workload.requiredDone} total={portal.workload.requiredTotal} styles={styles} /><WorkloadLine label="Optativa" done={portal.workload.optionalDone} total={portal.workload.optionalTotal} styles={styles} /><WorkloadLine label="Extensão" done={portal.workload.extensionDone} total={portal.workload.extensionTotal} styles={styles} /></Surface> : null}
     </View>
   );
@@ -1243,6 +1293,34 @@ function Hero({ period, title, subtitle, styles }: ScreenProps & { period: strin
 
 function TitleBlock({ title, subtitle, styles }: { title: string; subtitle: string; styles: ReturnType<typeof createStyles> }) {
   return <View style={styles.titleBlock}><Text style={styles.pageTitle}>{title}</Text><Text style={styles.caption}>{subtitle}</Text></View>;
+}
+
+const TYPE_FILTERS: Array<{ id: CourseTypeFilter; label: string }> = [
+  { id: "all", label: "Todas" },
+  { id: "OBR", label: "Obrigatórias" },
+  { id: "OPT", label: "Optativas" },
+  { id: "ELT", label: "Eletivas" },
+];
+
+function TypeFilter({ value, onChange, styles }: { value: CourseTypeFilter; onChange(value: CourseTypeFilter): void; styles: ReturnType<typeof createStyles> }) {
+  return (
+    <View style={styles.segmented}>
+      {TYPE_FILTERS.map((item) => {
+        const active = value === item.id;
+        return (
+          <Pressable
+            key={item.id}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            onPress={() => onChange(item.id)}
+            style={[styles.segment, active && styles.segmentActive]}
+          >
+            <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{item.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
 }
 
 function BackHeader({ label, onPress, theme, styles }: ScreenProps & { label: string; onPress(): void }) {
@@ -1514,4 +1592,3 @@ function chunk<T>(items:T[],size:number):T[][] { const result:T[][]=[]; for(let 
 function workloadLine(portal:PortalData):string { const w=portal.workload; return w?`${w.totalDone.toLocaleString("pt-BR")}h cumpridas · ${Math.max(0,w.totalRequired-w.totalDone).toLocaleString("pt-BR")}h restantes · extensão ${w.extensionDone}h de ${w.extensionTotal}h`:"Carga horária não disponível"; }
 function messageOf(cause:unknown):string { return cause instanceof Error&&cause.message?cause.message:"Não foi possível atualizar os dados da UFGD."; }
 function reportLoadTiming(stage:string,startedAt:number):void { console.info(`[SIGECAD tempo] ${stage}: ${Date.now()-startedAt}ms`); }
-function nextFrame():Promise<void> { return new Promise((resolve) => requestAnimationFrame(() => resolve())); }
