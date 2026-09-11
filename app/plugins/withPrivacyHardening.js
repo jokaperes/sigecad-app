@@ -45,14 +45,21 @@ function withPrivacyHardening(config) {
 
   config = withMainActivity(config, (config) => {
     let src = config.modResults.contents;
-    if (!src.includes("FLAG_SECURE")) {
-      src = src.replace(
-        "import android.os.Bundle",
-        "import android.os.Bundle\nimport android.view.WindowManager\nimport android.webkit.WebView",
-      );
+    src = src.replace(/\nimport android.view.WindowManager\n/, "\n");
+    src = src.replace(
+      /[ \t]*window\.setFlags\(WindowManager\.LayoutParams\.FLAG_SECURE, WindowManager\.LayoutParams\.FLAG_SECURE\)\n/,
+      "",
+    );
+    if (!src.includes("WebView.setWebContentsDebuggingEnabled")) {
+      if (!src.includes("import android.webkit.WebView")) {
+        src = src.replace(
+          "import android.os.Bundle",
+          "import android.os.Bundle\nimport android.webkit.WebView",
+        );
+      }
       src = src.replace(
         "super.onCreate(null)",
-        "super.onCreate(null)\n    window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)\n    WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)",
+        "super.onCreate(null)\n    WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)",
       );
     }
     config.modResults.contents = src;

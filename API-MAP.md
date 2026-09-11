@@ -87,9 +87,11 @@ as chamadas acadêmicas evita a troca acadêmico → cartão → acadêmico. P3/
 atualizam foto e telas secundárias em segundo plano.
 
 “Média parcial” não existe como campo geral confiável nestas respostas. O app
-não calcula mais média aritmética de avaliações, pois fórmulas e pesos variam.
-A tela Notas mostra a nota final oficial quando existir ou a última nota
-disponível, devidamente rotulada. A Home em Cards prioriza o Cartão Acadêmico expandido.
+não calcula média aritmética de avaliações (P1, P2 e afins), pois fórmulas e
+pesos variam. A tela Notas mostra a nota final oficial quando existir ou a última
+nota disponível, devidamente rotulada. A tela Histórico mostra a média das notas
+finais oficiais (`nota` com `avaliacao` diferente de conceito), separada por
+OBR, OPT e ELT. A Home em Cards prioriza o Cartão Acadêmico expandido.
 
 Resultados de matrícula são interpretados por allowlist: `MAT` continua ativo;
 `AP`, `RP`, `APE` e `RPF` encerram agenda/alerta/consulta detalhada de faltas. Um
@@ -127,7 +129,7 @@ As telas adicionais validam e mantêm somente em memória os campos necessários
 /rest/faltas       -> [{mes, faltas: [{data, hora, id}]}]
 /rest/horarios     -> faixas com segunda..sabado e aulas/local/professor
 /rest/matriculas   -> código, disciplina, turma, situação, etapa e datas
-/rest/historico    -> períodos com disciplina, carga, nota, faltas e resultado
+/rest/historico    -> períodos com disciplina, tipo, avaliação, carga, nota, faltas e resultado
 /rest/estrutura    -> curso, faculdade, estrutura e disciplinas da grade
 /rest/chcursada    -> cargas obrigatória, optativa, extensão e total
 /rest/cursadascursando -> IDs de disciplinas cursadas/em curso

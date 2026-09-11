@@ -25,12 +25,12 @@ considera o código inspecionado neste repositório.
 | T6 | Hash truncado/unsalted de nota (baixa entropia) | Alta | Alta em disco antigo | Persistência móvel acadêmica desligada; CLI grava HMAC-SHA256 com chave local 0600, sem rótulos | Snapshot em RAM ainda usa SHA-256[:16] só para diff local. Dump de memória revela notas. |
 | T7 | MITM / CA de usuário (proxy) | Alta | Média em aparelho com CA instalada | Cleartext proibido; trust-anchors só `system`; sem pinning | Comprometimento da CA raiz do sistema ou do TLS da UFGD não é detectado. Pinning foi recusado: a UFGD rotaciona certificados e um pin quebrado impede login. |
 | T8 | Navegação da WebView para origem não aprovada / XSS em subdomínio UFGD | Alta | Média no allowlist antigo `*.ufgd.edu.br` | Allowlist exata: `login.app`, `sigecad-academico.app`, `cartao.app` e `sso.acesso.gov.br` somente no login. Webdoc não navega a sessão | XSS no SIGECAD oficial ainda pode chamar a ponte naquela origem. |
-| T9 | Backup Android / extração USB / screenshots / recents | Alta | Alta com `allowBackup=true` antigo | `allowBackup=false`, rules de exclusão, `FLAG_SECURE` | Root, malware com MediaProjection privilegiado, ou display externo podem ainda capturar. |
+| T9 | Backup Android / extração USB / recents | Alta | Alta com `allowBackup=true` antigo | `allowBackup=false`, rules de exclusão | Screenshot do app está liberado. Recents e captura de tela mostram o que está na tela, incluindo cartão e notas. |
 | T10 | Dependência / supply chain | Alta | Média | lockfiles npm; sem analytics/crashlytics de produto | Compromisso de `react-native-webview` ou Metro no build local não é detectado automaticamente. |
 | T11 | Email (Resend) com nome de disciplina | Média | Certa no self-host antigo | Corpo genérico: “Há uma atualização…” | O provedor ainda vê o endereço de email e o fato de uma atualização. |
 | T12 | Clipboard do RGA | Média | Certa após toque | Só após toque explícito em Perfil | O RGA permanece no clipboard do SO até ser substituído. |
 | T13 | PDF temporário no cache | Média | Baixa | Arquivo genérico, apagado no `finally` e no boot | Crash no meio do share pode deixar PDF até a próxima abertura. |
-| T14 | Aparelho root / malware local / debugger | Alta | Alta no device comprometido | FLAG_SECURE, sem WebView debug em release, chave HMAC no SecureStore | **Não há defesa real** contra root. |
+| T14 | Aparelho root / malware local / debugger | Alta | Alta no device comprometido | Sem WebView debug em release, chave HMAC no SecureStore | **Não há defesa real** contra root. |
 | T15 | Replay / Sybil no sentinela | Alta | N/A enquanto desligado | Feature desativada | Reativar exige App Check, quórum e análise nova. |
 | T16 | `raw/` e `state.json` locais com dados reais | Alta | Certa nesta máquina de desenvolvimento | gitignore; testes usam fixtures sintéticos | Arquivos locais continuam no disco do desenvolvedor. Não versionar. |
 
@@ -62,9 +62,9 @@ CA raiz comprometida, não por proxy com CA de usuário.
 
 ## Arquivos alterados e motivo
 
-Ver o diff desta sessão. Em resumo: WebView/origens, Android (backup, FLAG_SECURE,
-cleartext, FirebaseInitProvider), persistência HMAC no CLI, sentinela desligado,
-email genérico, testes de segurança.
+Ver o diff desta sessão. Em resumo: WebView/origens, Android (backup, cleartext,
+FirebaseInitProvider), persistência HMAC no CLI, sentinela desligado, email
+genérico, testes de segurança. Screenshot do app está liberado.
 
 ## Como validar
 
@@ -90,8 +90,8 @@ npm audit --audit-level=high
   reutiliza o cookie persistido no sandbox; o JavaScript do app nunca lê o valor.
 - O dashboard não grava notas, rótulos, hashes acadêmicos nem o cookie em
   AsyncStorage.
-- Backup Android e extração cloud estão desligados no manifesto de produção;
-  `FLAG_SECURE` impede screenshot/recents do app.
+- Backup Android e extração cloud estão desligados no manifesto de produção.
+  Screenshot e recents do app estão liberados.
 - WebView debugging está desligado em release.
 - O modo central Docker não sobe no `compose up` padrão (`profiles: [central]`).
 - Emails de notificação self-host/central não incluem nome de disciplina.

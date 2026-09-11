@@ -38,6 +38,17 @@ export interface HistoryCourse {
   grade: number | string | null;
   result: string | null;
   absences: number | null;
+  type: string | null;
+  evaluation: string | null;
+}
+
+export type CourseTypeFilter = "all" | "OBR" | "OPT" | "ELT";
+
+export interface OfficialTypeAverage {
+  type: "OBR" | "OPT" | "ELT";
+  label: string;
+  average: number;
+  count: number;
 }
 
 export interface CurriculumCourse {
@@ -330,6 +341,8 @@ function parseHistory(value: unknown): HistoryCourse[] {
         grade: optionalScalar(item.nota),
         result: optionalText(item.resultado, 120),
         absences: optionalNumber(item.faltas),
+        type: optionalText(item.tipo_disciplina, 100),
+        evaluation: optionalText(item.avaliacao, 40),
       };
     });
   }).slice(0, 800);
@@ -412,6 +425,64 @@ function admissionFromRga(rga: string | null): string | null {
   if (explicit) return `${explicit[1]}/${explicit[2]}`;
   const numeric = rga?.match(/^((?:19|20)\d{2})\d{10}$/);
   return numeric?.[1] ?? null;
+}
+
+const COURSE_TYPE_LABELS: Record<"OBR" | "OPT" | "ELT", string> = {
+  OBR: "OBR",
+  OPT: "OPT",
+  ELT: "ELT",
+};
+
+export function normalizeCourseType(
+  type: string | null | undefined,
+): "OBR" | "OPT" | "ELT" | "LEG" | null {
+  const value = (type ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+  if (!value) return null;
+  if (value === "OBR" || value.startsWith("OBRIG")) return "OBR";
+  if (value === "OPT" || value.startsWith("OPTAT")) return "OPT";
+  if (value === "ELT" || value.startsWith("ELET")) return "ELT";
+  if (value === "LEG") return "LEG";
+  return null;
+}
+
+export function matchesCourseType(
+  type: string | null | undefined,
+  filter: CourseTypeFilter,
+): boolean {
+  if (filter === "all") return true;
+  return normalizeCourseType(type) === filter;
+}
+
+export function officialAveragesByType(history: HistoryCourse[]): OfficialTypeAverage[] {
+  const buckets: Record<"OBR" | "OPT" | "ELT", number[]> = { OBR: [], OPT: [], ELT: [] };
+  for (const course of history) {
+    const kind = normalizeCourseType(course.type);
+    if (kind !== "OBR" && kind !== "OPT" && kind !== "ELT") continue;
+    if (/conceito/i.test(course.evaluation ?? "")) continue;
+    const grade = numericHistoryGrade(course.grade);
+    if (grade === null) continue;
+    buckets[kind].push(grade);
+  }
+  const result: OfficialTypeAverage[] = [];
+  for (const type of ["OBR", "OPT", "ELT"] as const) {
+    const grades = buckets[type];
+    if (!grades.length) continue;
+    const sum = grades.reduce((total, value) => total + value, 0);
+    result.push({
+      type,
+      label: COURSE_TYPE_LABELS[type],
+      average: Math.round(sum / grades.length * 100) / 100,
+      count: grades.length,
+    });
+  }
+  return result;
+}
+
+function numericHistoryGrade(value: number | string | null | undefined): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return null;
+  const parsed = Number(value.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export function resolveAdmission(candidate: string | null, history: HistoryCourse[]): string | null {

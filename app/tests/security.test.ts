@@ -178,7 +178,7 @@ await check("plugin e app.json endurecem o Android de produção", () => {
   const plugin = source("plugins/withPrivacyHardening.js");
   const appJson = source("app.json");
   assert(plugin.includes('android:allowBackup"] = "false"'));
-  assert(plugin.includes("FLAG_SECURE"));
+  assert(!plugin.includes("window.setFlags(WindowManager.LayoutParams.FLAG_SECURE"));
   assert(plugin.includes("cleartextTrafficPermitted"));
   assert(appJson.includes("withPrivacyHardening"));
   assert(appJson.includes('"allowBackup": false'));
@@ -192,7 +192,8 @@ await check("plugin e app.json endurecem o Android de produção", () => {
     assert(manifest.includes('android:allowBackup="false"'));
     assert(manifest.includes("network_security_config"));
     assert(manifest.includes('android:usesCleartextTraffic="false"'));
-    assert(activity.includes("FLAG_SECURE"));
+    assert(!activity.includes("FLAG_SECURE"));
+    assert(!activity.includes("WindowManager"));
     assert(network.includes('cleartextTrafficPermitted="false"'));
     assert(!debug.includes('usesCleartextTraffic="true"'));
   }

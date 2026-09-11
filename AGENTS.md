@@ -23,6 +23,9 @@ backend Firebase device-sentinel.
 10. Não afirmar que algo nativo/deploy foi validado sem device ou credenciais reais.
 11. Não reativar o sentinela Firebase (`SENTINEL_ENABLED`) nem o servidor central
     no APK. Segurança e claims: [SECURITY.md](SECURITY.md).
+12. Toda mudança no app mobile termina no mesmo trabalho: commit na branch local,
+    recorte público em `main`, APK assinado e release no GitHub
+    (`jokaperes/sigecad-app`). Não deixar alteração só na máquina.
 
 ## Arquitetura vigente
 

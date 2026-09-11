@@ -69,7 +69,8 @@ tests/                        11 core + 7 ciclo + 42 Expo Go
   fechar a folha nativa. Atestado respeita o bloqueio da própria UFGD. Planos usam
   exclusivamente o `peID` devolvido por `/rest/planosensino`, abrem o relatório por
   GET e seguem o mesmo redirect assinado e validado para o Webdoc. A lista é
-  agrupada por semestre, com o período atual primeiro e os demais em ordem decrescente.
+  agrupada por semestre, com o período atual primeiro. Semestres anteriores
+  entram quando a lista chega ao fim.
 - A foto é validada pelos bytes JPEG/PNG mesmo quando o portal envia um
   `Content-Type` impreciso. Nomes em caixa alta são normalizados somente na UI;
   avaliações sem valor não aparecem como novidade de nota.

@@ -22,7 +22,7 @@ sem extração de cookie. Detalhes em [SECURITY.md](SECURITY.md).
 
 ## APK Android local
 
-Build local validado em 21/08/2026:
+Build local validado em 11/09/2026:
 
 - JDK 21 portátil em `~/tools/jdk-21.0.12.1+1` (o Temurin 24 do sistema não é
   suportado pelo Gradle do RN 0.81); Android SDK em
@@ -33,7 +33,7 @@ Build local validado em 21/08/2026:
   somente em `android/gradle.properties` (ignorado). Sem as propriedades, o
   release cai no keystore de debug.
 - Comandos: `npx expo prebuild -p android && cd android && ./gradlew
-  assembleRelease`. APK 0.3.0 arm64-v8a, com R8 e libs nativas compactadas.
+  assembleRelease`. APK 0.3.3 arm64-v8a, com R8 e libs nativas compactadas.
   Push/background seguem desativados até o projeto Firebase real.
 
 ## Expo Go no iPhone e Android
@@ -93,7 +93,8 @@ Build local validado em 21/08/2026:
    refeições restantes e a menor recarga que elimina a sobra.
 15. IBM Plex e Lucide são importadas por arquivo usado. Isso evita embutir os
     catálogos completos de fontes e ícones e reduz download/parse do bundle.
-16. Em `Perfil > Documentos acadêmicos`, catálogo e planos carregam sob demanda.
+16. Em `Perfil > Documentos acadêmicos`, catálogo e planos do período atual
+    carregam sob demanda. Semestres anteriores entram ao chegar no fim da lista.
     Histórico segue apenas o redirect assinado exato do SIGECAD para o Webdoc
     oficial, cujo PDF de até 8 MB é validado e removido depois da folha nativa.
     Atestado respeita o bloqueio da própria UFGD. Como a emissão de planos

@@ -216,7 +216,7 @@ Após a otimização, uma nova sessão limpa no mesmo AVD mediu Home acadêmica
   notas, foto, saldos e extrato não devem aparecer antes de nova sessão/carga.
 - Desative a rede após uma carga e confira o aviso de cache sem corpo de erro 5xx.
 - Não deve haver senha, cookie ou token nos logs do Metro.
-- Não compartilhe screenshot real. Para relatar um bug, oculte nome, RGA, foto,
+- Screenshot do app está liberado. Para relatar um bug, oculte nome, RGA, foto,
   notas, valores e qualquer identificador.
 
 ## 5. O que o Expo Go não testa
