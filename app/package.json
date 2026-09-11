@@ -1,6 +1,6 @@
 {
   "name": "sigecad-app",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "license": "UNLICENSED",
   "private": true,
   "main": "index.ts",
@@ -8,6 +8,7 @@
     "start": "expo start --go",
     "start:go": "expo start --go",
     "start:dev": "expo start --dev-client",
+    "postinstall": "node scripts/harden-react-native-webview.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "test": "node --import tsx tests/diff.test.ts && node --import tsx tests/expo-go.test.ts",

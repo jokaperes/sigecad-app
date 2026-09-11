@@ -39,6 +39,9 @@ const portalSessionSourcePath = resolve(dirname(fileURLToPath(import.meta.url)),
 const designSourcePath = resolve(dirname(fileURLToPath(import.meta.url)), "../src/expo-go/design/DesignExpoGoApp.tsx");
 const appSourcePath = resolve(dirname(fileURLToPath(import.meta.url)), "../App.tsx");
 const expoGoEntryPath = resolve(dirname(fileURLToPath(import.meta.url)), "../src/expo-go/ExpoGoApp.tsx");
+const hardenerPath = resolve(dirname(fileURLToPath(import.meta.url)), "../scripts/harden-react-native-webview.js");
+const packageJsonPath = resolve(dirname(fileURLToPath(import.meta.url)), "../package.json");
+const webviewRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../node_modules/react-native-webview");
 
 async function check(name: string, test: () => void | Promise<void>) {
   total += 1;
@@ -100,7 +103,7 @@ await check("dashboard fica acima da WebView oculta no Android", () => {
   const source = readFileSync(portalSessionSourcePath, "utf8");
   assert(source.includes('<View style={styles.contentLayer}>{children}</View>'));
   assert(source.includes('contentLayer: { flex: 1, position: "relative", zIndex: 1 }'));
-  assert(source.includes('hiddenBrowser: { ...StyleSheet.absoluteFill, opacity: 0.01, zIndex: 0 }'));
+  assert(source.includes('hiddenBrowser: { ...StyleSheet.absoluteFillObject, opacity: 0.01, zIndex: 0 }'));
   assert(source.includes('Platform.OS === "android"'));
   assert(source.includes('hiddenBrowserAndroid: { position: "absolute", width: 2, height: 2, left: 0'));
   assert(source.includes('bottom: 0, opacity: 0.01, zIndex: 0'));
@@ -123,6 +126,11 @@ await check("ponte recarrega a mesma origem após restauração", () => {
 
 await check("login começa no CAS e só conecta depois do SIGECAD", () => {
   const source = readFileSync(portalSessionSourcePath, "utf8");
+  const hardener = readFileSync(hardenerPath, "utf8");
+  const packageJson = readFileSync(packageJsonPath, "utf8");
+  const installedShared = readFileSync(resolve(webviewRoot, "src/WebViewShared.tsx"), "utf8");
+  const installedClient = readFileSync(resolve(webviewRoot, "android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java"), "utf8");
+  const installedChrome = readFileSync(resolve(webviewRoot, "android/src/main/java/com/reactnativecommunity/webview/RNCWebChromeClient.java"), "utf8");
   assert(source.includes("const [browserUri, setBrowserUri] = useState(CAS_URL);"));
   assert(!source.includes("const [browserUri, setBrowserUri] = useState(SIGECAD_HOME);"));
   assert(!source.includes("function onNavigation"));
@@ -138,6 +146,15 @@ await check("login começa no CAS e só conecta depois do SIGECAD", () => {
   assert(source.includes("KEEP_SESSION_NAVIGATION_SCRIPT"));
   assert(source.includes("Entrando no SIGECAD"));
   assert(source.includes("A sessão fica só neste aparelho"));
+  assert(packageJson.includes('"postinstall": "node scripts/harden-react-native-webview.js"'));
+  assert(hardener.includes("SIGECAD_ALLOWED_HOSTS"));
+  assert(hardener.includes("applySigecadNavigationPolicy"));
+  assert(hardener.includes('if (!"about:blank".equals(url)) view.loadUrl(url)'));
+  assert(!installedShared.includes("Linking.openURL"));
+  assert(!installedShared.includes("Linking.canOpenURL"));
+  assert(installedClient.includes("SIGECAD_ALLOWED_HOSTS"));
+  assert(installedClient.includes("applySigecadNavigationPolicy"));
+  assert(installedChrome.includes('if (!"about:blank".equals(url)) view.loadUrl(url)'));
   assert(source.includes('loginBrandText}>SIGECAD</Text>'));
   assert(source.includes("loginBrandText: { color: \"#17201C\", fontFamily: fonts.monoSemibold, fontSize: 15, letterSpacing: 0.8, paddingRight: 6, flexShrink: 0 }"));
 });
