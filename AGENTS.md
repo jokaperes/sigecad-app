@@ -176,10 +176,13 @@ build limpo. Nesta máquina, Docker pode não estar instalado.
 
 ## Estado automatizado verificado em 11/09/2026
 
-- APK local 0.3.5: `assembleRelease` assinado com `app/sigecad-release.keystore`,
-  arm64-v8a, R8 e libs compactadas. Login CAS permanece na WebView; o redirect
-  HTTP legado do SIGECAD é reescrito para HTTPS e o site oficial é coberto até a
-  sessão estável. Push/background seguem desativados até o projeto Firebase real.
+- APK local 0.3.6: `assembleRelease` assinado com `app/sigecad-release.keystore`,
+  arm64-v8a, R8 e libs compactadas. Login CAS permanece na WebView; o cliente
+  Android bloqueia a entrega de URLs a navegadores externos, o redirect HTTP
+  legado é reescrito para HTTPS e o site oficial é coberto até a sessão estável.
+  Instalação sobre a 0.3.5, login completo e reabertura foram validados no AVD
+  1440×3120/505 dpi sem iniciar navegador. Push/background seguem desativados
+  até o projeto Firebase real.
 
 - Python: 24/24 testes.
 - App: 78/78 testes, TypeScript strict, bundles iOS/Android e Expo Doctor 18/18.

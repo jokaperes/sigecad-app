@@ -16,7 +16,7 @@ npm test
 npm run doctor
 ```
 
-Resultado automatizado revalidado em 11/09/2026, após o 0.3.5:
+Resultado automatizado revalidado em 11/09/2026, após o 0.3.6:
 
 - TypeScript sem erros;
 - 78/78 testes do app;
@@ -78,8 +78,15 @@ Resultado esperado: 28/28 testes Python e 5/5 testes de Functions.
 
 ### Android Emulator desta máquina
 
-O AVD já criado é `SIGECAD_Pixel_8_API_36` e usa Pixel 8 ARM64/API 36. Com o Metro
-na porta 8082, a sequência local é:
+Os AVDs disponíveis são `SIGECAD_Pixel_8_API_36` e
+`SIGECAD_Galaxy_S24_Ultra_API_36`. O segundo usa 1440×3120, 505 dpi, ARM64 e
+Android 16 para reproduzir as dimensões do Galaxy S24 Ultra; ele não reproduz a
+One UI da Samsung. Com o Metro na porta 8082, a sequência local é:
+
+Em 11/09/2026, o APK assinado 0.3.6, código 9, foi instalado por cima da 0.3.5
+no AVD do S24 Ultra. O login CAS completo terminou na Home nativa sem iniciar
+Chrome ou outro navegador. Após encerrar o processo e reabrir o app, a sessão
+voltou direto à Home e nenhum navegador foi iniciado.
 
 ```bash
 /opt/homebrew/share/android-commandlinetools/emulator/emulator @SIGECAD_Pixel_8_API_36

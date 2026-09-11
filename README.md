@@ -53,9 +53,10 @@ O app usa Expo SDK 57, React Native 0.86 e React 19.2 e possui dois runtimes. No
 Expo Go, a WebView privada abre primeiro o CAS oficial; o login, o redirect (inclusive
 o provedor oficial gov.br) e o cookie permanecem dentro do app. Depois do login o
 site do SIGECAD não é exibido: o dashboard nativo assume a sessão no aparelho. No
-Android, novas janelas do login são forçadas a navegar na mesma WebView, sem abrir
-o navegador externo. O redirect HTTP legado do SIGECAD é reescrito para HTTPS
-na mesma WebView. Uma ponte de mesma
+Android, novas janelas do login são forçadas a navegar na mesma WebView. O cliente
+nativo bloqueia qualquer entrega para navegador externo e recusa esquemas, portas
+e hosts fora da lista oficial. O redirect HTTP legado do SIGECAD é reescrito para
+HTTPS na mesma WebView. Uma ponte de mesma
 origem com allowlist fixa consulta períodos, turmas, notas, faltas, horários,
 matrícula, histórico, estrutura, carga horária, perfil e operações acadêmicas,
 sempre por GET e somente com IDs devolvidos pela própria sessão. A mesma WebView
@@ -118,7 +119,7 @@ em [app/TESTING.md](app/TESTING.md).
 
 ```bash
 python3 -m unittest discover -s tests -v       # 28 testes
-cd app && npm test && npm run typecheck        # 77 testes + TypeScript strict
+cd app && npm test && npm run typecheck        # 78 testes + TypeScript strict
 cd ../functions && npm test                    # build + 5 testes de policy
 ```
 

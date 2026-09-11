@@ -33,8 +33,11 @@ Build local validado em 11/09/2026:
   somente em `android/gradle.properties` (ignorado). Sem as propriedades, o
   release cai no keystore de debug.
 - Comandos: `npx expo prebuild -p android && cd android && ./gradlew
-  assembleRelease`. APK 0.3.5 arm64-v8a, com R8 e libs nativas compactadas.
+  assembleRelease`. APK 0.3.6 arm64-v8a, com R8 e libs nativas compactadas.
   Push/background seguem desativados até o projeto Firebase real.
+- O APK 0.3.6 foi instalado sobre a 0.3.5 no AVD 1440×3120/505 dpi. O login CAS
+  terminou na Home nativa sem iniciar navegador externo; encerrar e reabrir o
+  processo preservou a sessão e voltou direto à Home.
 
 ## Expo Go no iPhone e Android
 
@@ -44,7 +47,8 @@ Build local validado em 11/09/2026:
    ficar estável (URL acadêmica sem `ticket`). No Android, múltiplas janelas ficam
    desativadas para que `window.open` e `target=_blank` naveguem na mesma WebView.
    O SIGECAD oficial ainda devolve o CAS com `service` HTTP; o app reescreve essa
-   URL para HTTPS e não deixa o React Native abrir o Chrome.
+   URL para HTTPS. O cliente Android da WebView também recusa esquemas, portas e
+   hosts fora da lista oficial, sem entregar URLs ao Chrome ou a outro navegador.
    O cookie UFGDNET fica no armazenamento privado do app (não é lido
    pelo JavaScript). Cache HTTP continua desligado. Navegação limitada às origens
    permitidas. `Sair da conta` apaga o cookie; uma sessão já válida pula direto ao

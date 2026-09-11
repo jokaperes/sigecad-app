@@ -26,7 +26,9 @@ O login começa na página CAS oficial da UFGD. A senha, o redirect (inclusive o
 provedor oficial gov.br) e o cookie permanecem na mesma WebView privada; o site
 do SIGECAD não é mostrado depois do login. No Android, suporte a múltiplas janelas
 fica desativado para manter `window.open` e `target=_blank` na WebView do app.
-O redirect HTTP legado do SIGECAD é reescrito para HTTPS, sem abrir o Chrome.
+Além da validação em React Native, o cliente Android recusa esquemas, portas e
+hosts fora da lista oficial sem entregar a URL ao Chrome ou a outro navegador.
+O redirect HTTP legado do SIGECAD é reescrito para HTTPS na mesma WebView.
 Links fora da sessão são rejeitados dentro do app. As rotas acadêmicas usam uma
 allowlist fixa somente GET; no portal Cartão,
 ID e hash são derivados somente da página da própria sessão. Notas, foto, saldos
@@ -37,6 +39,7 @@ e extratos ficam em memória e somente hashes/rótulos acadêmicos são persisti
 ```text
 App.tsx                       seleciona Expo Go ou native build
 src/runtime/capabilities.ts   detecta StoreClient/appOwnership sem carregar Firebase
+scripts/harden-react-native-webview.js bloqueia saída da WebView no cliente Android
 src/expo-go/ExpoGoApp.tsx     entrada do dashboard Claude Design
 src/expo-go/design/           telas acadêmicas, variantes, IBM Plex e claro/escuro
 src/expo-go/PortalSession.tsx WebView com cookie persistido no app e ciclo de sessão

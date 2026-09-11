@@ -1,6 +1,7 @@
 const {
   AndroidConfig,
   withAndroidManifest,
+  withAppBuildGradle,
   withMainActivity,
   withDangerousMod,
 } = require("expo/config-plugins");
@@ -66,8 +67,42 @@ function withPrivacyHardening(config) {
     return config;
   });
 
+  config = withAppBuildGradle(config, (config) => {
+    let src = config.modResults.contents;
+    if (!src.includes("SIGECAD_UPLOAD_STORE_FILE")) {
+      src = src.replace(
+        "    signingConfigs {\n        debug {",
+        `    signingConfigs {
+        release {
+            if (project.hasProperty('SIGECAD_UPLOAD_STORE_FILE') &&
+                project.hasProperty('SIGECAD_UPLOAD_STORE_PASSWORD') &&
+                project.hasProperty('SIGECAD_UPLOAD_KEY_ALIAS') &&
+                project.hasProperty('SIGECAD_UPLOAD_KEY_PASSWORD')) {
+                storeFile file(SIGECAD_UPLOAD_STORE_FILE)
+                storePassword SIGECAD_UPLOAD_STORE_PASSWORD
+                keyAlias SIGECAD_UPLOAD_KEY_ALIAS
+                keyPassword SIGECAD_UPLOAD_KEY_PASSWORD
+            }
+        }
+        debug {`,
+      );
+      src = src.replace(
+        "            signingConfig signingConfigs.debug\n            def enableShrinkResources",
+        "            signingConfig signingConfigs.release\n            def enableShrinkResources",
+      );
+      if (!src.includes("signingConfig signingConfigs.release")) {
+        throw new Error("Não foi possível configurar a assinatura release do Android");
+      }
+    }
+    config.modResults.contents = src;
+    return config;
+  });
+
   config = withDangerousMod(config, ["android", async (config) => {
     const root = config.modRequest.platformProjectRoot;
+    const hardener = path.join(config.modRequest.projectRoot, "scripts/harden-react-native-webview.js");
+    delete require.cache[require.resolve(hardener)];
+    require(hardener);
     writeXml(root, "app/src/main/res/xml/network_security_config.xml", `<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">

@@ -202,20 +202,49 @@ await check("WebView de sessão está endurecida", () => {
 
 await check("plugin e app.json endurecem o Android de produção", () => {
   const plugin = source("plugins/withPrivacyHardening.js");
+  const hardener = source("scripts/harden-react-native-webview.js");
+  const packageJson = source("package.json");
   const appJson = source("app.json");
   assert(plugin.includes('android:allowBackup"] = "false"'));
   assert(!plugin.includes("window.setFlags(WindowManager.LayoutParams.FLAG_SECURE"));
   assert(plugin.includes("cleartextTrafficPermitted"));
+  assert(plugin.includes("harden-react-native-webview.js"));
+  assert(plugin.includes("withAppBuildGradle"));
+  assert(plugin.includes("signingConfig signingConfigs.release"));
+  assert(plugin.includes("SIGECAD_UPLOAD_STORE_FILE"));
+  assert(packageJson.includes('"postinstall": "node scripts/harden-react-native-webview.js"'));
+  assert(hardener.includes('new Set(["13.15.0", "13.16.1"])'));
+  assert(hardener.includes("SIGECAD_ALLOWED_HOSTS"));
+  assert(hardener.includes("applySigecadNavigationPolicy"));
+  assert(hardener.includes('view.loadUrl(destination.toString())'));
+  assert(hardener.includes('if (!"about:blank".equals(url)) view.loadUrl(url)'));
+  const installedShared = resolve(root, "node_modules/react-native-webview/src/WebViewShared.tsx");
+  const installedSharedBuild = resolve(root, "node_modules/react-native-webview/lib/WebViewShared.js");
+  const installedClient = resolve(root, "node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java");
+  if (existsSync(installedShared) && existsSync(installedSharedBuild) && existsSync(installedClient)) {
+    const shared = readFileSync(installedShared, "utf8");
+    const sharedBuild = readFileSync(installedSharedBuild, "utf8");
+    const client = readFileSync(installedClient, "utf8");
+    assert(!shared.includes("Linking.openURL"));
+    assert(!shared.includes("Linking.canOpenURL"));
+    assert(!sharedBuild.includes("Linking.openURL"));
+    assert(!sharedBuild.includes("Linking.canOpenURL"));
+    assert(client.includes("SIGECAD_ALLOWED_HOSTS"));
+    assert(client.includes("applySigecadNavigationPolicy"));
+    assert(client.includes("if (!request.isForMainFrame()) return false;"));
+  }
   assert(appJson.includes("withPrivacyHardening"));
   assert(appJson.includes('"allowBackup": false'));
   assert(appJson.includes("usesCleartextTraffic"));
   const manifestPath = resolve(root, "android/app/src/main/AndroidManifest.xml");
   if (existsSync(manifestPath)) {
+    const gradle = source("android/app/build.gradle");
     const manifest = readFileSync(manifestPath, "utf8");
     const activity = source("android/app/src/main/java/br/edu/ufgd/notificador/MainActivity.kt");
     const network = source("android/app/src/main/res/xml/network_security_config.xml");
     const debug = source("android/app/src/debug/AndroidManifest.xml");
     assert(manifest.includes('android:allowBackup="false"'));
+    assert(gradle.includes("signingConfig signingConfigs.release"));
     assert(manifest.includes("network_security_config"));
     assert(manifest.includes('android:usesCleartextTraffic="false"'));
     assert(!activity.includes("FLAG_SECURE"));
