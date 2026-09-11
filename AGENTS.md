@@ -51,7 +51,9 @@ backend Firebase device-sentinel.
   provedor oficial gov.br — dentro do app. O ticket CAS não dispara a ponte; o
   site do SIGECAD fica coberto até a sessão acadêmica estável. No Android,
   `setSupportMultipleWindows` permanece falso para que popup e `target=_blank`
-  naveguem na mesma WebView. O cookie permanece no cookie jar nativo para reabrir sem
+  naveguem na mesma WebView. O SIGECAD ainda redireciona o CAS com
+  `service=http://sigecad-academico...`; essa URL é reescrita para HTTPS antes de
+  carregar, para o React Native não abrir o Chrome. O cookie permanece no cookie jar nativo para reabrir sem
   relogar; o JS nunca lê `UFGDNET`. `Sair da conta` apaga.
 - Cookie, senha e `document.cookie` nunca atravessam a ponte React Native.
 - A ponte acadêmica aceita somente a allowlist documentada em `API-MAP.md`, por
@@ -170,17 +172,17 @@ build limpo. Nesta máquina, Docker pode não estar instalado.
 
 ## Estado automatizado verificado em 11/09/2026
 
-- APK local 0.3.4: `assembleRelease` assinado com `app/sigecad-release.keystore`,
-  arm64-v8a, R8 e libs compactadas. Login CAS permanece na WebView; o site do
-  SIGECAD é coberto até a sessão estável. Push/background seguem desativados até o
-  projeto Firebase real.
+- APK local 0.3.5: `assembleRelease` assinado com `app/sigecad-release.keystore`,
+  arm64-v8a, R8 e libs compactadas. Login CAS permanece na WebView; o redirect
+  HTTP legado do SIGECAD é reescrito para HTTPS e o site oficial é coberto até a
+  sessão estável. Push/background seguem desativados até o projeto Firebase real.
 
 - Python: 24/24 testes.
-- App: 60/60 testes, TypeScript strict, bundles iOS/Android e Expo Doctor 18/18.
+- App: 78/78 testes, TypeScript strict, bundles iOS/Android e Expo Doctor 18/18.
 - Functions: build strict + 5/5 testes.
 - Expo SDK 57 / React Native 0.86 / React 19.2 para compatibilidade com a
   versão mais recente do Expo Go (57.0.9+).
-- Expo Doctor 21/21 e testes automatizados 72/72 validados.
+- Expo Doctor 21/21 e testes automatizados 78/78 validados.
 - Firebase ainda precisa de projeto real, arquivos Google Services, App Check e device build.
 - Resend e deploy central precisam de secrets externos.
 - O portal de cartão pode retornar 5xx; tratar como indisponibilidade, sem retry agressivo.

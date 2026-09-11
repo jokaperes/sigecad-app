@@ -6,9 +6,11 @@ import { Brand, Notice } from "../ui/components";
 import { colors, radius, spacing } from "../ui/theme";
 import {
   CAS_ORIGIN,
+  KEEP_SESSION_NAVIGATION_SCRIPT,
   SIGECAD_ORIGIN,
   WEBVIEW_ORIGIN_WHITELIST,
   isAllowedSessionUrl,
+  rewriteSessionNavigationUrl,
 } from "../expo-go/origins";
 
 const CAS_URL =
@@ -18,6 +20,15 @@ const CAS_URL =
 export function NativeLoginScreen({ onDone: _onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [browserUri, setBrowserUri] = useState(CAS_URL);
+
+  function allowInsideApp(url: string): boolean {
+    const rewrittenUrl = rewriteSessionNavigationUrl(url);
+    if (rewrittenUrl) {
+      setBrowserUri(rewrittenUrl);
+      return false;
+    }
+    return isAllowedSessionUrl(url);
+  }
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -44,6 +55,7 @@ export function NativeLoginScreen({ onDone: _onDone }: { onDone: () => void }) {
           setSupportMultipleWindows={false}
           javaScriptCanOpenWindowsAutomatically={false}
           geolocationEnabled={false}
+          injectedJavaScriptBeforeContentLoaded={KEEP_SESSION_NAVIGATION_SCRIPT}
           startInLoadingState
           renderLoading={() => (
             <View style={styles.loading}>
@@ -51,9 +63,11 @@ export function NativeLoginScreen({ onDone: _onDone }: { onDone: () => void }) {
               <Text style={styles.loadingText}>Abrindo login seguro…</Text>
             </View>
           )}
-          onShouldStartLoadWithRequest={({ url }) => isAllowedSessionUrl(url)}
+          onShouldStartLoadWithRequest={({ url }) => allowInsideApp(url)}
           onOpenWindow={({ nativeEvent }) => {
-            if (isAllowedSessionUrl(nativeEvent.targetUrl)) setBrowserUri(nativeEvent.targetUrl);
+            const requestedUrl = nativeEvent.targetUrl;
+            const url = rewriteSessionNavigationUrl(requestedUrl) ?? requestedUrl;
+            if (isAllowedSessionUrl(url)) setBrowserUri(url);
           }}
         />
       </View>

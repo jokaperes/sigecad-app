@@ -23,6 +23,7 @@ import {
   isLoginUrl,
   isStableAcademicUrl,
   hasCasServiceTicket,
+  rewriteSessionNavigationUrl,
 } from "../src/expo-go/origins";
 import { SENTINEL_ENABLED } from "../src/native/sentinelFlag";
 
@@ -96,7 +97,25 @@ await check("somente origens da sessão autenticada são permitidas", () => {
   assert(isBridgeUrl(`${SIGECAD_ORIGIN}/rest/notas`));
   assert(isLoginUrl(`${CAS_ORIGIN}/?service=x`));
   assert(SESSION_ORIGINS.length === 4);
-  assert(WEBVIEW_ORIGIN_WHITELIST.length === 1 && WEBVIEW_ORIGIN_WHITELIST[0] === "https://*");
+  assert(WEBVIEW_ORIGIN_WHITELIST.length === 1 && WEBVIEW_ORIGIN_WHITELIST[0] === "*");
+});
+
+await check("redirect HTTP do SIGECAD permanece no app em HTTPS", () => {
+  const ticket = "ST-test-ticket";
+  assert(rewriteSessionNavigationUrl("http://sigecad-academico.app.ufgd.edu.br/") === `${SIGECAD_ORIGIN}/`);
+  assert(
+    rewriteSessionNavigationUrl(`http://sigecad-academico.app.ufgd.edu.br/?ticket=${ticket}`) ===
+      `${SIGECAD_ORIGIN}/?ticket=${ticket}`,
+  );
+  assert(
+    rewriteSessionNavigationUrl(`${CAS_ORIGIN}/?service=${encodeURIComponent("http://sigecad-academico.app.ufgd.edu.br/")}`) ===
+      `${CAS_ORIGIN}/?service=${encodeURIComponent(`${SIGECAD_ORIGIN}/`)}`,
+  );
+  assert(rewriteSessionNavigationUrl(`${SIGECAD_ORIGIN}/`) === null);
+  assert(rewriteSessionNavigationUrl(`${CAS_ORIGIN}/?service=${encodeURIComponent(`${SIGECAD_ORIGIN}/`)}`) === null);
+  assert(rewriteSessionNavigationUrl("http://evil.ufgd.edu.br/") === null);
+  assert(rewriteSessionNavigationUrl("http://user:pass@sigecad-academico.app.ufgd.edu.br/") === null);
+  assert(!isAllowedSessionUrl("http://sigecad-academico.app.ufgd.edu.br/"));
 });
 
 await check("ticket CAS não é sessão acadêmica estável e não vaza no helper", () => {
@@ -149,6 +168,8 @@ await check("login nativo não extrai UFGDNET", () => {
   assert(!login.includes("saveToken"));
   assert(!login.includes("UFGDNET"));
   assert(login.includes("isAllowedSessionUrl"));
+  assert(login.includes("rewriteSessionNavigationUrl"));
+  assert(login.includes("KEEP_SESSION_NAVIGATION_SCRIPT"));
   assert(login.includes("setSupportMultipleWindows={false}"));
 });
 
@@ -173,6 +194,9 @@ await check("WebView de sessão está endurecida", () => {
   assert(session.includes("setSupportMultipleWindows={false}"));
   assert(!session.includes("          setSupportMultipleWindows\n"));
   assert(session.includes("isAllowedSessionUrl(url)"));
+  assert(session.includes("rewriteSessionNavigationUrl"));
+  assert(session.includes("KEEP_SESSION_NAVIGATION_SCRIPT"));
+  assert(source("src/expo-go/origins.ts").includes("window.open = function (url)"));
   assert(!session.includes("Linking.openURL"));
 });
 

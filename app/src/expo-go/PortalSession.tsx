@@ -31,11 +31,13 @@ import {
   SIGECAD_ORIGIN,
   WEBDOC_ORIGIN,
   WEBVIEW_ORIGIN_WHITELIST,
+  KEEP_SESSION_NAVIGATION_SCRIPT,
   isAllowedSessionUrl,
   isBridgeUrl,
   isLoginUrl,
   isStableAcademicUrl,
   hasCasServiceTicket,
+  rewriteSessionNavigationUrl,
   safeHttpsOrigin,
 } from "./origins";
 import type { PortalBatchItem, PortalBatchRequest } from "./client";
@@ -63,6 +65,7 @@ const ACADEMIC_BRIDGE_REVISION = "academic-v5";
 const CARD_BRIDGE_REVISION = "card-v1";
 const NAV_READY_CHANNEL = "sigecad-nav-ready-v1";
 const NAV_READY_SCRIPT = `
+${KEEP_SESSION_NAVIGATION_SCRIPT}
 (function () {
   try {
     var origin = window.location.origin;
@@ -453,9 +456,17 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     markOriginReady(url);
   }
 
+  function loadSessionUrlInsideApp(url: string) {
+    coverAcademicNavigation(url);
+    if (browserUri === url) webView.current?.reload();
+    else setBrowserUri(url);
+  }
+
   function onOpenWindow(event: { nativeEvent: { targetUrl: string } }) {
-    const url = event.nativeEvent.targetUrl;
-    if (isAllowedSessionUrl(url)) setBrowserUri(url);
+    const requestedUrl = event.nativeEvent.targetUrl;
+    const url = rewriteSessionNavigationUrl(requestedUrl) ?? requestedUrl;
+    if (!isAllowedSessionUrl(url)) return;
+    loadSessionUrlInsideApp(url);
   }
 
   function onMessage(event: WebViewMessageEvent) {
@@ -605,6 +616,12 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
 
   function onShouldStartLoad(requestValue: { url: string }): boolean {
     const { url } = requestValue;
+    const rewrittenUrl = rewriteSessionNavigationUrl(url);
+    if (rewrittenUrl) {
+      loadSessionUrlInsideApp(rewrittenUrl);
+      return false;
+    }
+    coverAcademicNavigation(url);
     if (consumeSignedDocumentUrl(url)) return false;
     if (safeHttpsOrigin(url) === WEBDOC_ORIGIN) return false;
     return isAllowedSessionUrl(url);

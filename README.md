@@ -54,7 +54,8 @@ Expo Go, a WebView privada abre primeiro o CAS oficial; o login, o redirect (inc
 o provedor oficial gov.br) e o cookie permanecem dentro do app. Depois do login o
 site do SIGECAD não é exibido: o dashboard nativo assume a sessão no aparelho. No
 Android, novas janelas do login são forçadas a navegar na mesma WebView, sem abrir
-o navegador externo. Uma ponte de mesma
+o navegador externo. O redirect HTTP legado do SIGECAD é reescrito para HTTPS
+na mesma WebView. Uma ponte de mesma
 origem com allowlist fixa consulta períodos, turmas, notas, faltas, horários,
 matrícula, histórico, estrutura, carga horária, perfil e operações acadêmicas,
 sempre por GET e somente com IDs devolvidos pela própria sessão. A mesma WebView

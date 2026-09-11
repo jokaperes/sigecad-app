@@ -16,10 +16,10 @@ npm test
 npm run doctor
 ```
 
-Resultado automatizado revalidado em 11/09/2026:
+Resultado automatizado revalidado em 11/09/2026, após o 0.3.5:
 
 - TypeScript sem erros;
-- 77/77 testes do app;
+- 78/78 testes do app;
 - Expo Doctor 21/21;
 - nenhum teste deve imprimir cookie, senha, token ou dados acadêmicos reais.
 

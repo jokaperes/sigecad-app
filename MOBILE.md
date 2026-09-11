@@ -33,7 +33,7 @@ Build local validado em 11/09/2026:
   somente em `android/gradle.properties` (ignorado). Sem as propriedades, o
   release cai no keystore de debug.
 - Comandos: `npx expo prebuild -p android && cd android && ./gradlew
-  assembleRelease`. APK 0.3.4 arm64-v8a, com R8 e libs nativas compactadas.
+  assembleRelease`. APK 0.3.5 arm64-v8a, com R8 e libs nativas compactadas.
   Push/background seguem desativados até o projeto Firebase real.
 
 ## Expo Go no iPhone e Android
@@ -43,6 +43,8 @@ Build local validado em 11/09/2026:
    site do SIGECAD não é mostrado: uma tela nativa cobre o WebView até a sessão
    ficar estável (URL acadêmica sem `ticket`). No Android, múltiplas janelas ficam
    desativadas para que `window.open` e `target=_blank` naveguem na mesma WebView.
+   O SIGECAD oficial ainda devolve o CAS com `service` HTTP; o app reescreve essa
+   URL para HTTPS e não deixa o React Native abrir o Chrome.
    O cookie UFGDNET fica no armazenamento privado do app (não é lido
    pelo JavaScript). Cache HTTP continua desligado. Navegação limitada às origens
    permitidas. `Sair da conta` apaga o cookie; uma sessão já válida pula direto ao
@@ -154,7 +156,7 @@ app/tests/                    core, ciclo e segurança Expo Go
 
 Automação revalidada em 18/07/2026; passagens de aparelho mantêm a data indicada:
 
-- `npm test`: 72/72;
+- `npm test`: 78/78;
 - `npm run typecheck`: TypeScript strict;
 - `npm run doctor`: 21/21;
 - `npm audit --audit-level=high`: nenhuma advisory alta ou crítica.
