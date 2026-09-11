@@ -49,8 +49,9 @@ backend Firebase device-sentinel.
   qualquer módulo Firebase/nativo.
 - No Expo Go, a WebView começa no CAS oficial e mantém o redirect — inclusive o
   provedor oficial gov.br — dentro do app. O ticket CAS não dispara a ponte; o
-  site do SIGECAD fica coberto até a sessão acadêmica estável. Popup permanece
-  na mesma WebView. O cookie permanece no cookie jar nativo para reabrir sem
+  site do SIGECAD fica coberto até a sessão acadêmica estável. No Android,
+  `setSupportMultipleWindows` permanece falso para que popup e `target=_blank`
+  naveguem na mesma WebView. O cookie permanece no cookie jar nativo para reabrir sem
   relogar; o JS nunca lê `UFGDNET`. `Sair da conta` apaga.
 - Cookie, senha e `document.cookie` nunca atravessam a ponte React Native.
 - A ponte acadêmica aceita somente a allowlist documentada em `API-MAP.md`, por
@@ -167,9 +168,9 @@ npm test
 Se Docker estiver disponível, também execute `docker compose config --quiet` e um
 build limpo. Nesta máquina, Docker pode não estar instalado.
 
-## Estado automatizado verificado em 18/07/2026
+## Estado automatizado verificado em 11/09/2026
 
-- APK local 0.3.0: `assembleRelease` assinado com `app/sigecad-release.keystore`,
+- APK local 0.3.4: `assembleRelease` assinado com `app/sigecad-release.keystore`,
   arm64-v8a, R8 e libs compactadas. Login CAS permanece na WebView; o site do
   SIGECAD é coberto até a sessão estável. Push/background seguem desativados até o
   projeto Firebase real.

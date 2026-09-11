@@ -24,7 +24,9 @@ npm run start:go -- --tunnel
 
 O login começa na página CAS oficial da UFGD. A senha, o redirect (inclusive o
 provedor oficial gov.br) e o cookie permanecem na mesma WebView privada; o site
-do SIGECAD não é mostrado depois do login. Links HTTPS fora da sessão são
+do SIGECAD não é mostrado depois do login. No Android, suporte a múltiplas janelas
+fica desativado para manter `window.open` e `target=_blank` na WebView do app.
+Links HTTPS fora da sessão são
 rejeitados dentro do app. As rotas acadêmicas usam uma
 allowlist fixa somente GET; no portal Cartão,
 ID e hash são derivados somente da página da própria sessão. Notas, foto, saldos
@@ -55,7 +57,7 @@ src/sentinel/cycle.ts         poll/report/baseline
 src/storage/                  AsyncStorage hash-only e registro
 src/ui/                       tema e componentes compartilhados
 assets/                       app icon e fontes oficiais UFGD/UFGDNet
-tests/                        11 core + 7 ciclo + 42 Expo Go
+tests/                        11 core + 7 ciclo + 48 Expo Go + 11 segurança
 ```
 
 ## Limites do Expo Go
@@ -203,7 +205,7 @@ npx expo run:ios
 
 Verificação automatizada:
 
-- 72/72 testes;
+- 77/77 testes;
 - TypeScript strict limpo;
 - Expo Doctor 21/21;
 - nenhuma vulnerabilidade npm alta/crítica;

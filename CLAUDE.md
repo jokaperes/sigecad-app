@@ -37,6 +37,8 @@ canônica para regras de segurança, arquitetura, estrutura e comandos de valida
   teclado, orientação, Home autenticada e tema escuro funcionam. A WebView oculta
   usa superfície desenhável de 2×2 px atrás da UI e fora do toque no Android,
   evitando que trocas de origem sejam suspensas; no iOS usa superfície completa.
+  Múltiplas janelas ficam desativadas no Android para impedir que o login abra o
+  navegador externo.
 - Progresso do curso: preferir os totais de `/rest/chcursada` da tela de Histórico;
   `percentual_concluido` de `dadosacademico` é somente fallback inicial.
 - Hidratação secundária: nunca apresentar vazio como resultado enquanto notas,

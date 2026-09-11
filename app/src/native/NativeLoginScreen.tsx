@@ -41,7 +41,7 @@ export function NativeLoginScreen({ onDone: _onDone }: { onDone: () => void }) {
           allowFileAccess={false}
           allowFileAccessFromFileURLs={false}
           allowUniversalAccessFromFileURLs={false}
-          setSupportMultipleWindows
+          setSupportMultipleWindows={false}
           javaScriptCanOpenWindowsAutomatically={false}
           geolocationEnabled={false}
           startInLoadingState

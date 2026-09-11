@@ -16,11 +16,11 @@ npm test
 npm run doctor
 ```
 
-Resultado automatizado revalidado em 18/07/2026:
+Resultado automatizado revalidado em 11/09/2026:
 
 - TypeScript sem erros;
-- 60/60 testes do app;
-- Expo Doctor 18/18;
+- 77/77 testes do app;
+- Expo Doctor 21/21;
 - nenhum teste deve imprimir cookie, senha, token ou dados acadêmicos reais.
 
 Para validar também o restante do repositório:
@@ -33,7 +33,7 @@ cd functions
 npm test
 ```
 
-Resultado esperado: 24/24 testes Python e 5/5 testes de Functions.
+Resultado esperado: 28/28 testes Python e 5/5 testes de Functions.
 
 ## 2. Abrir no iPhone ou Android com Expo Go
 
@@ -58,6 +58,8 @@ Resultado esperado: 24/24 testes Python e 5/5 testes de Functions.
    CAS deve ser a primeira página; se usar “Entrar com gov.br”, o fluxo também
    deve permanecer no app, sem abrir o Chrome/Safari. O app não deve pedir que você
    cole cookie, token ou senha em tela própria.
+   No Android, repita com qualquer link do fluxo que use nova janela e confirme
+   que ele substitui a página na WebView, sem trocar para o navegador externo.
 7. Depois do redirect para o SIGECAD, o site oficial não deve aparecer. A tela
    “Entrando no SIGECAD…” cobre o WebView até a Home nativa. Antes do login, essa
    tela não deve aparecer nem deve haver consulta de períodos.

@@ -33,7 +33,7 @@ Build local validado em 11/09/2026:
   somente em `android/gradle.properties` (ignorado). Sem as propriedades, o
   release cai no keystore de debug.
 - Comandos: `npx expo prebuild -p android && cd android && ./gradlew
-  assembleRelease`. APK 0.3.3 arm64-v8a, com R8 e libs nativas compactadas.
+  assembleRelease`. APK 0.3.4 arm64-v8a, com R8 e libs nativas compactadas.
   Push/background seguem desativados até o projeto Firebase real.
 
 ## Expo Go no iPhone e Android
@@ -41,8 +41,9 @@ Build local validado em 11/09/2026:
 1. `PortalSession` abre primeiro o CAS oficial na mesma WebView. O formulário, o
    redirect acadêmico e o gov.br oficial ficam dentro do app. Depois do login, o
    site do SIGECAD não é mostrado: uma tela nativa cobre o WebView até a sessão
-   ficar estável (URL acadêmica sem `ticket`). Popup (`window.open`) volta para a
-   mesma WebView. O cookie UFGDNET fica no armazenamento privado do app (não é lido
+   ficar estável (URL acadêmica sem `ticket`). No Android, múltiplas janelas ficam
+   desativadas para que `window.open` e `target=_blank` naveguem na mesma WebView.
+   O cookie UFGDNET fica no armazenamento privado do app (não é lido
    pelo JavaScript). Cache HTTP continua desligado. Navegação limitada às origens
    permitidas. `Sair da conta` apaga o cookie; uma sessão já válida pula direto ao
    dashboard após o CAS.

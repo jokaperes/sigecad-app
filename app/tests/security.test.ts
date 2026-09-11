@@ -149,6 +149,7 @@ await check("login nativo não extrai UFGDNET", () => {
   assert(!login.includes("saveToken"));
   assert(!login.includes("UFGDNET"));
   assert(login.includes("isAllowedSessionUrl"));
+  assert(login.includes("setSupportMultipleWindows={false}"));
 });
 
 await check("WebView de sessão está endurecida", () => {
@@ -169,7 +170,8 @@ await check("WebView de sessão está endurecida", () => {
   assert(session.includes("if (origin !=="));
   assert(!session.includes("endsWith(\".ufgd.edu.br\")"));
   assert(session.includes("onOpenWindow={onOpenWindow}"));
-  assert(session.includes("setSupportMultipleWindows"));
+  assert(session.includes("setSupportMultipleWindows={false}"));
+  assert(!session.includes("          setSupportMultipleWindows\n"));
   assert(session.includes("isAllowedSessionUrl(url)"));
   assert(!session.includes("Linking.openURL"));
 });

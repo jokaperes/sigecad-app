@@ -686,7 +686,7 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
           allowFileAccessFromFileURLs={false}
           allowUniversalAccessFromFileURLs={false}
           allowingReadAccessToURL=""
-          setSupportMultipleWindows
+          setSupportMultipleWindows={false}
           javaScriptCanOpenWindowsAutomatically={false}
           geolocationEnabled={false}
           mediaPlaybackRequiresUserAction

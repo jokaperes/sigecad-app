@@ -132,6 +132,8 @@ await check("login começa no CAS e só conecta depois do SIGECAD", () => {
   assert(source.includes("abortInFlightBridge"));
   assert(source.includes("coveringPortal"));
   assert(source.includes("onOpenWindow={onOpenWindow}"));
+  assert(source.includes("setSupportMultipleWindows={false}"));
+  assert(!source.includes("          setSupportMultipleWindows\n"));
   assert(source.includes("Entrando no SIGECAD"));
   assert(source.includes("A sessão fica só neste aparelho"));
   assert(source.includes('loginBrandText}>SIGECAD</Text>'));
