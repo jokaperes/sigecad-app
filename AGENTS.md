@@ -26,6 +26,10 @@ backend Firebase device-sentinel.
 12. Toda mudança no app mobile termina no mesmo trabalho: commit na branch local,
     recorte público em `main`, APK assinado e release no GitHub
     (`jokaperes/sigecad-app`). Não deixar alteração só na máquina.
+13. A nota da GitHub release é texto público para quem baixa o APK. Descrever só
+    a correção, no tom da 0.3.4. Nunca escrever lá ressalva de teste, emulador,
+    conta UFGD, device, sessão do agente, nem "o aluno precisa instalar X".
+    Isso fica no chat.
 
 ## Arquitetura vigente
 
