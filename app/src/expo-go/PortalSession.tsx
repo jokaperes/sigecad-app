@@ -65,6 +65,22 @@ const ACADEMIC_BRIDGE_REVISION = "academic-v5";
 const CARD_BRIDGE_REVISION = "card-v1";
 const NAV_READY_CHANNEL = "sigecad-nav-ready-v1";
 const NAV_READY_SCRIPT = `
+(function () {
+  try {
+    var origin = window.location.origin;
+    if (origin !== ${JSON.stringify(SIGECAD_ORIGIN)} &&
+        origin !== ${JSON.stringify(CARD_ORIGIN)} &&
+        origin !== ${JSON.stringify(WEBDOC_ORIGIN)}) return;
+    var hide = function () {
+      var root = document.documentElement;
+      if (!root) return;
+      root.style.setProperty("visibility", "hidden", "important");
+      root.style.setProperty("background", "#F7F8F5", "important");
+    };
+    hide();
+    document.addEventListener("readystatechange", hide, true);
+  } catch (_) {}
+})();
 ${KEEP_SESSION_NAVIGATION_SCRIPT}
 (function () {
   try {

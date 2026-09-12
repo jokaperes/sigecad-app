@@ -97,6 +97,42 @@ replace(
 
 replace(
   "android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java",
+  /    private @Nullable Boolean applySigecadNavigationPolicy/,
+  `    private boolean shouldHideSigecadDocument(String value) {
+        final Uri uri;
+        try {
+            uri = Uri.parse(value);
+        } catch (RuntimeException error) {
+            return true;
+        }
+        if (!"https".equalsIgnoreCase(uri.getScheme())) return false;
+        final String host = uri.getHost();
+        return SIGECAD_HOST.equalsIgnoreCase(host) ||
+            "cartao.app.ufgd.edu.br".equalsIgnoreCase(host) ||
+            "webdoc.app.ufgd.edu.br".equalsIgnoreCase(host);
+    }
+
+    private boolean shouldBlockSigecadSubframe(String value) {
+        final Uri uri;
+        try {
+            uri = Uri.parse(value);
+        } catch (RuntimeException error) {
+            return true;
+        }
+        final String scheme = uri.getScheme();
+        if (scheme == null) return true;
+        return !"https".equalsIgnoreCase(scheme) &&
+            !"about".equalsIgnoreCase(scheme) &&
+            !"data".equalsIgnoreCase(scheme) &&
+            !"blob".equalsIgnoreCase(scheme);
+    }
+
+    private @Nullable Boolean applySigecadNavigationPolicy`,
+  "shouldBlockSigecadSubframe",
+);
+
+replace(
+  "android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java",
   /    public boolean shouldOverrideUrlLoading\(WebView view, String url\) \{\n        final RNCWebView rncWebView/,
   `    public boolean shouldOverrideUrlLoading(WebView view, String url) {
         final Boolean sigecadDecision = applySigecadNavigationPolicy(view, url);
@@ -107,11 +143,22 @@ replace(
 
 replace(
   "android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java",
-  /    public boolean shouldOverrideUrlLoading\(WebView view, WebResourceRequest request\) \{\n        final String url/,
+  /    public void onPageStarted\(WebView webView, String url, Bitmap favicon\) \{\n      super\.onPageStarted\(webView, url, favicon\);/,
+  `    public void onPageStarted(WebView webView, String url, Bitmap favicon) {
+      webView.setAlpha(shouldHideSigecadDocument(url) ? 0.0f : 1.0f);
+      super.onPageStarted(webView, url, favicon);`,
+  "webView.setAlpha(shouldHideSigecadDocument(url) ? 0.0f : 1.0f);",
+);
+
+replace(
+  "android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java",
+  /    public boolean shouldOverrideUrlLoading\(WebView view, WebResourceRequest request\) \{\n(?:        if \(!request\.isForMainFrame\(\)\) return false;\n)?        final String url = request\.getUrl\(\)\.toString\(\);\n        return this\.shouldOverrideUrlLoading\(view, url\);\n    \}/,
   `    public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-        if (!request.isForMainFrame()) return false;
-        final String url`,
-  "if (!request.isForMainFrame()) return false;",
+        final String url = request.getUrl().toString();
+        if (!request.isForMainFrame()) return shouldBlockSigecadSubframe(url);
+        return this.shouldOverrideUrlLoading(view, url);
+    }`,
+  "return shouldBlockSigecadSubframe(url);",
 );
 
 replace(
@@ -152,6 +199,23 @@ replace(
     @Override
     public boolean onConsoleMessage`,
   "if (!\"about:blank\".equals(url)) view.loadUrl(url);",
+);
+
+replace(
+  "android/src/main/java/com/reactnativecommunity/webview/RNCWebChromeClient.java",
+  /                if \(!"about:blank"\.equals\(url\)\) view\.loadUrl\(url\);\n                return true;/g,
+  `                if (!"about:blank".equals(url)) view.loadUrl(url);
+                subview.stopLoading();
+                subview.destroy();
+                return true;`,
+  "subview.destroy();",
+);
+
+replace(
+  "android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt",
+  /settings\.setSupportMultipleWindows\(true\)/,
+  "settings.setSupportMultipleWindows(false)",
+  "settings.setSupportMultipleWindows(false)",
 );
 
 console.log("react-native-webview endurecida para o SIGECAD");
