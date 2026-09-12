@@ -136,6 +136,7 @@ await check("login começa no CAS e só conecta depois do SIGECAD", () => {
   assert(!source.includes("          setSupportMultipleWindows\n"));
   assert(source.includes("rewriteSessionNavigationUrl"));
   assert(source.includes("KEEP_SESSION_NAVIGATION_SCRIPT"));
+  assert(source.includes('root.style.setProperty("visibility", "hidden", "important")'));
   assert(source.includes("Entrando no SIGECAD"));
   assert(source.includes("A sessão fica só neste aparelho"));
   assert(source.includes('loginBrandText}>SIGECAD</Text>'));

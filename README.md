@@ -55,8 +55,11 @@ o provedor oficial gov.br) e o cookie permanecem dentro do app. Depois do login 
 site do SIGECAD não é exibido: o dashboard nativo assume a sessão no aparelho. No
 Android, novas janelas do login são forçadas a navegar na mesma WebView. O cliente
 nativo bloqueia qualquer entrega para navegador externo e recusa esquemas, portas
-e hosts fora da lista oficial. O redirect HTTP legado do SIGECAD é reescrito para
-HTTPS na mesma WebView. Uma ponte de mesma
+e hosts fora da lista oficial. A WebView já nasce sem suporte a múltiplas janelas,
+e a `MainApplication` e a `MainActivity` recusam intents HTTP/HTTPS como barreira
+final. O redirect HTTP
+legado do SIGECAD é reescrito para HTTPS na mesma WebView, e o documento do portal
+acadêmico fica oculto antes do primeiro desenho. Uma ponte de mesma
 origem com allowlist fixa consulta períodos, turmas, notas, faltas, horários,
 matrícula, histórico, estrutura, carga horária, perfil e operações acadêmicas,
 sempre por GET e somente com IDs devolvidos pela própria sessão. A mesma WebView

@@ -33,13 +33,16 @@ canônica para regras de segurança, arquitetura, estrutura e comandos de valida
   Planos usam somente `peID` devolvido pela sessão em GET fixo; IDs livres são recusados.
 - Performance visual: manter imports por peso da IBM Plex e por arquivo da Lucide;
   importar os barrels completos volta a incluir catálogos inteiros no bundle.
-- Android Expo Go: o fluxo público foi validado em Pixel 8 ARM64/API 36; login,
-  teclado, orientação, Home autenticada e tema escuro funcionam. A WebView oculta
+- Android Expo Go: o fluxo público foi validado no perfil Galaxy S24 Ultra
+  ARM64/API 36 em 1440×3120; login, teclado, orientação, Home autenticada e tema
+  escuro funcionam. A WebView oculta
   usa superfície desenhável de 2×2 px atrás da UI e fora do toque no Android,
   evitando que trocas de origem sejam suspensas; no iOS usa superfície completa.
-  Múltiplas janelas ficam desativadas no Android. O cliente nativo da WebView
+  Múltiplas janelas já nascem desativadas no Android. O cliente nativo da WebView
   bloqueia a entrega de URLs para navegadores externos e limita a navegação aos
-  hosts oficiais. O service HTTP legado do SIGECAD é reescrito para HTTPS.
+  hosts oficiais. A `MainApplication` e a `MainActivity` recusam saída HTTP/HTTPS,
+  e o portal acadêmico fica oculto antes do primeiro desenho. O service HTTP
+  legado do SIGECAD é reescrito para HTTPS.
 - Progresso do curso: preferir os totais de `/rest/chcursada` da tela de Histórico;
   `percentual_concluido` de `dadosacademico` é somente fallback inicial.
 - Hidratação secundária: nunca apresentar vazio como resultado enquanto notas,

@@ -53,12 +53,15 @@ backend Firebase device-sentinel.
   qualquer módulo Firebase/nativo.
 - No Expo Go, a WebView começa no CAS oficial e mantém o redirect — inclusive o
   provedor oficial gov.br — dentro do app. O ticket CAS não dispara a ponte; o
-  site do SIGECAD fica coberto até a sessão acadêmica estável. No Android,
-  `setSupportMultipleWindows` permanece falso para que popup e `target=_blank`
-  naveguem na mesma WebView. O SIGECAD ainda redireciona o CAS com
+  site do SIGECAD fica oculto desde o início do documento até a sessão acadêmica
+  estável. No Android, `setSupportMultipleWindows` nasce falso para que popup e
+  `target=_blank` naveguem na mesma WebView. A Activity e a Application do app
+  recusam intents `http`, `https` e `intent:` como última barreira contra
+  navegadores externos.
+  O SIGECAD ainda pode redirecionar o CAS com
   `service=http://sigecad-academico...`; essa URL é reescrita para HTTPS antes de
-  carregar, para o React Native não abrir o Chrome. O cookie permanece no cookie jar nativo para reabrir sem
-  relogar; o JS nunca lê `UFGDNET`. `Sair da conta` apaga.
+  carregar. O cookie permanece no cookie jar nativo para reabrir sem relogar; o
+  JS nunca lê `UFGDNET`. `Sair da conta` apaga.
 - Cookie, senha e `document.cookie` nunca atravessam a ponte React Native.
 - A ponte acadêmica aceita somente a allowlist documentada em `API-MAP.md`, por
   GET relativo; IDs vêm sempre da própria sessão e a UI nunca fornece URL/caminho.
@@ -176,20 +179,19 @@ build limpo. Nesta máquina, Docker pode não estar instalado.
 
 ## Estado automatizado verificado em 11/09/2026
 
-- APK local 0.3.6: `assembleRelease` assinado com `app/sigecad-release.keystore`,
-  arm64-v8a, R8 e libs compactadas. Login CAS permanece na WebView; o cliente
-  Android bloqueia a entrega de URLs a navegadores externos, o redirect HTTP
-  legado é reescrito para HTTPS e o site oficial é coberto até a sessão estável.
-  Instalação sobre a 0.3.5, login completo e reabertura foram validados no AVD
-  1440×3120/505 dpi sem iniciar navegador. Push/background seguem desativados
-  até o projeto Firebase real.
+- APK local 0.3.7: `assembleRelease` assinado com `app/sigecad-release.keystore`,
+  arm64-v8a, R8 e libs compactadas. A WebView nasce sem suporte a múltiplas
+  janelas, bloqueia subframes não HTTPS e destrói popups temporários. A
+  `MainApplication` e a `MainActivity` recusam saída HTTP/HTTPS; o portal fica
+  oculto antes do primeiro desenho. Instalação e abertura foram validadas no AVD
+  1440×3120/505 dpi sem iniciar Activity de navegador.
+  Push/background seguem desativados até o projeto Firebase real.
 
-- Python: 24/24 testes.
-- App: 78/78 testes, TypeScript strict, bundles iOS/Android e Expo Doctor 18/18.
+- Python: 28/28 testes.
+- App: 78/78 testes, TypeScript strict e Expo Doctor 21/21.
 - Functions: build strict + 5/5 testes.
 - Expo SDK 57 / React Native 0.86 / React 19.2 para compatibilidade com a
   versão mais recente do Expo Go (57.0.9+).
-- Expo Doctor 21/21 e testes automatizados 78/78 validados.
 - Firebase ainda precisa de projeto real, arquivos Google Services, App Check e device build.
 - Resend e deploy central precisam de secrets externos.
 - O portal de cartão pode retornar 5xx; tratar como indisponibilidade, sem retry agressivo.

@@ -3,6 +3,7 @@ const {
   withAndroidManifest,
   withAppBuildGradle,
   withMainActivity,
+  withMainApplication,
   withDangerousMod,
 } = require("expo/config-plugins");
 const fs = require("node:fs");
@@ -29,11 +30,49 @@ function writeXml(projectRoot, relative, contents) {
   fs.writeFileSync(target, contents);
 }
 
+function removeBrowserVisibilityQueries(manifest) {
+  const queries = manifest.manifest.queries;
+  if (!Array.isArray(queries)) return;
+  for (const query of queries) {
+    if (!Array.isArray(query.intent)) continue;
+    query.intent = query.intent.filter((intent) => {
+      const actions = Array.isArray(intent.action) ? intent.action : [];
+      const categories = Array.isArray(intent.category) ? intent.category : [];
+      const data = Array.isArray(intent.data) ? intent.data : [];
+      const opensUrl = actions.some((item) => item.$?.["android:name"] === "android.intent.action.VIEW");
+      const browsable = categories.some((item) => item.$?.["android:name"] === "android.intent.category.BROWSABLE");
+      const handlesHttps = data.some((item) => item.$?.["android:scheme"] === "https");
+      return !(opensUrl && browsable && handlesHttps);
+    });
+  }
+  manifest.manifest.queries = queries.filter((query) => !Array.isArray(query.intent) || query.intent.length > 0);
+  if (manifest.manifest.queries.length === 0) delete manifest.manifest.queries;
+}
+
+function blockMergedPermissions(manifest) {
+  const existing = Array.isArray(manifest.manifest["uses-permission"])
+    ? manifest.manifest["uses-permission"]
+    : [];
+  const allowed = existing.filter((permission) => {
+    const name = permission.$?.["android:name"];
+    return !BLOCKED_PERMISSIONS.includes(name);
+  });
+  const removals = BLOCKED_PERMISSIONS.map((name) => ({
+    $: {
+      "android:name": name,
+      "tools:node": "remove",
+    },
+  }));
+  manifest.manifest["uses-permission"] = [...allowed, ...removals];
+}
+
 function withPrivacyHardening(config) {
   config = withAndroidManifest(config, (config) => {
     const manifest = config.modResults;
     ensureToolsNamespace(manifest);
     AndroidConfig.Permissions.removePermissions(manifest, BLOCKED_PERMISSIONS);
+    blockMergedPermissions(manifest);
+    removeBrowserVisibilityQueries(manifest);
     const application = AndroidConfig.Manifest.getMainApplicationOrThrow(manifest);
     application.$["android:allowBackup"] = "false";
     application.$["android:fullBackupContent"] = "@xml/backup_rules";
@@ -62,6 +101,87 @@ function withPrivacyHardening(config) {
         "super.onCreate(null)",
         "super.onCreate(null)\n    WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)",
       );
+    }
+    if (!src.includes("blocksSigecadExternalWebIntent")) {
+      if (!src.includes("import android.content.Intent")) {
+        src = src.replace(
+          "import android.os.Build",
+          "import android.content.Intent\nimport android.os.Build",
+        );
+      }
+      src = src.replace(
+        "\n  /**\n   * Returns the name of the main component registered from JavaScript.",
+        `
+  override fun startActivity(intent: Intent?) {
+    if (blocksSigecadExternalWebIntent(intent)) return
+    super.startActivity(intent)
+  }
+
+  override fun startActivity(intent: Intent?, options: Bundle?) {
+    if (blocksSigecadExternalWebIntent(intent)) return
+    super.startActivity(intent, options)
+  }
+
+  override fun startActivityForResult(intent: Intent, requestCode: Int) {
+    if (blocksSigecadExternalWebIntent(intent)) return
+    super.startActivityForResult(intent, requestCode)
+  }
+
+  override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
+    if (blocksSigecadExternalWebIntent(intent)) return
+    super.startActivityForResult(intent, requestCode, options)
+  }
+
+  private fun blocksSigecadExternalWebIntent(intent: Intent?): Boolean {
+    if (intent?.action != Intent.ACTION_VIEW) return false
+    val scheme = intent.data?.scheme?.lowercase()
+    return scheme == "http" || scheme == "https" || scheme == "intent"
+  }
+
+  /**
+   * Returns the name of the main component registered from JavaScript.`,
+      );
+      if (!src.includes("blocksSigecadExternalWebIntent")) {
+        throw new Error("Não foi possível bloquear intents web na MainActivity");
+      }
+    }
+    config.modResults.contents = src;
+    return config;
+  });
+
+  config = withMainApplication(config, (config) => {
+    let src = config.modResults.contents;
+    if (!src.includes("blocksSigecadExternalWebIntent")) {
+      if (!src.includes("import android.content.Intent")) {
+        src = src.replace(
+          "import android.app.Application",
+          "import android.app.Application\nimport android.content.Intent\nimport android.os.Bundle",
+        );
+      }
+      src = src.replace(
+        "\n  override val reactHost:",
+        `
+  override fun startActivity(intent: Intent) {
+    if (blocksSigecadExternalWebIntent(intent)) return
+    super.startActivity(intent)
+  }
+
+  override fun startActivity(intent: Intent, options: Bundle?) {
+    if (blocksSigecadExternalWebIntent(intent)) return
+    super.startActivity(intent, options)
+  }
+
+  private fun blocksSigecadExternalWebIntent(intent: Intent): Boolean {
+    if (intent.action != Intent.ACTION_VIEW) return false
+    val scheme = intent.data?.scheme?.lowercase()
+    return scheme == "http" || scheme == "https" || scheme == "intent"
+  }
+
+  override val reactHost:`,
+      );
+      if (!src.includes("blocksSigecadExternalWebIntent")) {
+        throw new Error("Não foi possível bloquear intents web na MainApplication");
+      }
     }
     config.modResults.contents = src;
     return config;
