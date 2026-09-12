@@ -140,7 +140,7 @@ await check("login começa no CAS e só conecta depois do SIGECAD", () => {
   assert(source.includes("Entrando no SIGECAD"));
   assert(source.includes("A sessão fica só neste aparelho"));
   assert(source.includes('loginBrandText}>SIGECAD</Text>'));
-  assert(source.includes("loginBrandText: { color: \"#17201C\", fontFamily: fonts.monoSemibold, fontSize: 15, letterSpacing: 0.8, paddingRight: 6, flexShrink: 0 }"));
+  assert(source.includes("loginBrandText: { color: \"#17201C\", fontFamily: fonts.monoSemibold, fontSize: 15, letterSpacing: 0.8, minWidth: 92, paddingRight: 12, flexShrink: 0 }"));
 });
 
 await check("letterSpacing no Android não corta a última letra", () => {
@@ -156,6 +156,8 @@ await check("letterSpacing no Android não corta a última letra", () => {
     }
   }
   assert(design.includes('logoSmall}>SIGECAD</Text>'));
+  assert(session.includes("letterSpacing: 0.8, minWidth: 92, paddingRight: 12"));
+  assert(ui.includes("letterSpacing: 0.4, minWidth: 112, paddingRight: 12"));
 });
 
 await check("sessão reutiliza períodos e instala cada bridge uma vez por página", () => {

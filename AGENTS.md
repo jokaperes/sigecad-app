@@ -177,14 +177,15 @@ npm test
 Se Docker estiver disponível, também execute `docker compose config --quiet` e um
 build limpo. Nesta máquina, Docker pode não estar instalado.
 
-## Estado automatizado verificado em 11/09/2026
+## Estado automatizado verificado em 12/09/2026
 
-- APK local 0.3.7: `assembleRelease` assinado com `app/sigecad-release.keystore`,
+- APK local 0.3.8: `assembleRelease` assinado com `app/sigecad-release.keystore`,
   arm64-v8a, R8 e libs compactadas. A WebView nasce sem suporte a múltiplas
   janelas, bloqueia subframes não HTTPS e destrói popups temporários. A
   `MainApplication` e a `MainActivity` recusam saída HTTP/HTTPS; o portal fica
   oculto antes do primeiro desenho. Instalação e abertura foram validadas no AVD
-  1440×3120/505 dpi sem iniciar Activity de navegador.
+  1440×3120/505 dpi sem iniciar Activity de navegador. O nome SIGECAD aparece
+  completo no cabeçalho de login desse perfil.
   Push/background seguem desativados até o projeto Firebase real.
 
 - Python: 28/28 testes.
