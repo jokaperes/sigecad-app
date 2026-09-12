@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   centered: { justifyContent: "center" },
   brand: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   logo: { width: 42, height: 42, borderRadius: 9 },
-  brandTitle: { color: colors.ink, fontSize: 21, fontWeight: "900", letterSpacing: 0.4, paddingRight: 6, flexShrink: 0 },
+  brandTitle: { color: colors.ink, fontSize: 21, fontWeight: "900", letterSpacing: 0.4, minWidth: 112, paddingRight: 12, flexShrink: 0 },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
