@@ -81,6 +81,11 @@ export type DocumentBridgeMessage =
   | {
     channel: typeof DOCUMENT_BRIDGE_CHANNEL;
     id: string;
+    type: "navigation-ready";
+  }
+  | {
+    channel: typeof DOCUMENT_BRIDGE_CHANNEL;
+    id: string;
     type: "signed-url";
     url: string;
   };
@@ -170,6 +175,9 @@ export function parseDocumentBridgeMessage(raw: string): DocumentBridgeMessage |
   if (item.type === "error" && typeof item.error === "string" &&
     ["auth", "unavailable", "invalid", "too-large", "network"].includes(item.error)) {
     return item as unknown as DocumentBridgeMessage;
+  }
+  if (item.type === "navigation-ready") {
+    return { channel: DOCUMENT_BRIDGE_CHANNEL, id: item.id, type: "navigation-ready" };
   }
   if (item.type === "signed-url" && typeof item.url === "string" && isAllowedSignedDocumentUrl(item.url)) {
     return { channel: DOCUMENT_BRIDGE_CHANNEL, id: item.id, type: "signed-url", url: item.url };

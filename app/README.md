@@ -35,6 +35,11 @@ Links fora da sessão são rejeitados dentro do app. As rotas acadêmicas usam u
 allowlist fixa somente GET; no portal Cartão,
 ID e hash são derivados somente da página da própria sessão. Notas, foto, saldos
 e extratos ficam em memória e somente hashes/rótulos acadêmicos são persistidos.
+Antes de reaproveitar SIGECAD ou Cartão, a sessão pergunta à própria WebView qual
+origem está ativa e se o DOM terminou de carregar. O `onLoadEnd` também passa por
+essa confirmação, então um callback atrasado não libera uma consulta na página
+anterior. Cada navegação interna recebe uma URL de controle nova para evitar que
+o React ignore uma troca de origem repetida.
 
 ## Estrutura
 
@@ -166,10 +171,9 @@ tests/                        11 core + 7 ciclo + 48 Expo Go + 12 segurança
 - A troca entre os portais acadêmico e Cartão atualiza a `source` do WKWebView.
   O JavaScript dos dois bridges é compilado na suíte para capturar escapes ou
   erros sintáticos que, no aparelho, acabariam apenas no timeout.
-- Um handshake de origem validada libera os GETs assim que o contexto JavaScript
-  seguro existe, sem esperar imagens e folhas de estilo da página oficial. O
-  cache HTTP do WebView continua desligado; o cookie de sessão persiste no
-  armazenamento privado do app até Sair ou expiração na UFGD.
+- Um handshake confirma a origem real e o fim do carregamento antes de liberar
+  os GETs. O cache HTTP da WebView continua desligado; o cookie de sessão persiste
+  no armazenamento privado do app até Sair ou expiração na UFGD.
 - Fontes e ícones são importados por arquivo. No export iOS, isso reduziu os
   módulos de `2.638` para `890`, o bundle Hermes de `6,51 MB` para `4,67 MB` e o
   diretório exportado de aproximadamente `11,46 MB` para `5,87 MB`, sem mudar o

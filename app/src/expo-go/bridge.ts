@@ -101,7 +101,7 @@ export function parseBridgeResponse(raw: string): BridgeResponse {
  */
 export const BRIDGE_BOOTSTRAP = `
 (function () {
-  if (window.__SIGECAD_BRIDGE_VERSION__ === 5 && window.__SIGECAD_REQUEST__ &&
+  if (window.__SIGECAD_BRIDGE_VERSION__ === 6 && window.__SIGECAD_REQUEST__ &&
     window.__SIGECAD_DOCUMENT__) return true;
   var CHANNEL = ${JSON.stringify(BRIDGE_CHANNEL)};
   var DOCUMENT_CHANNEL = ${JSON.stringify(DOCUMENT_BRIDGE_CHANNEL)};
@@ -385,6 +385,8 @@ export const BRIDGE_BOOTSTRAP = `
   }
   async function captureSignedDocument(request) {
     var path = signedDocumentPath(request);
+    sendDocument({ id: request.id, type: "navigation-ready" });
+    await new Promise(function (resolve) { setTimeout(resolve, 160); });
     try {
       var response = await fetch(path, {
         method: "GET",
@@ -438,7 +440,7 @@ export const BRIDGE_BOOTSTRAP = `
       sendDocument({ id: request.id, type: "error", error: code });
     }
   };
-  window.__SIGECAD_BRIDGE_VERSION__ = 5;
+  window.__SIGECAD_BRIDGE_VERSION__ = 6;
   return true;
 })();
 true;

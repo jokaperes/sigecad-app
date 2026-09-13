@@ -16,7 +16,7 @@ npm test
 npm run doctor
 ```
 
-Resultado automatizado revalidado em 11/09/2026, após o 0.3.6:
+Resultado automatizado revalidado em 12/09/2026, após o 0.3.9:
 
 - TypeScript sem erros;
 - 78/78 testes do app;
@@ -83,10 +83,16 @@ Os AVDs disponíveis são `SIGECAD_Pixel_8_API_36` e
 Android 16 para reproduzir as dimensões do Galaxy S24 Ultra; ele não reproduz a
 One UI da Samsung. Com o Metro na porta 8082, a sequência local é:
 
-Em 11/09/2026, o APK assinado 0.3.6, código 9, foi instalado por cima da 0.3.5
-no AVD do S24 Ultra. O login CAS completo terminou na Home nativa sem iniciar
-Chrome ou outro navegador. Após encerrar o processo e reabrir o app, a sessão
-voltou direto à Home e nenhum navegador foi iniciado.
+Em 12/09/2026, o APK assinado 0.3.9, código 12, foi instalado no AVD do S24
+Ultra. O login CAS completo, o logout e o novo login permaneceram na WebView do
+app. A Home nativa abriu sem iniciar Chrome ou outro navegador. Após encerrar o
+processo, reinstalar por cima e reabrir o app, a sessão voltou à Home.
+
+No mesmo APK, atestado de matrícula, histórico escolar e um plano de ensino
+abriram a folha nativa de compartilhar/salvar. A troca repetida entre as origens
+do Cartão e do SIGECAD não exibiu o portal. Também passaram atualização manual,
+modo avião, recuperação da rede, rotação, preferências, limpeza do histórico
+local e as telas acadêmicas descritas neste roteiro.
 
 ```bash
 /opt/homebrew/share/android-commandlinetools/emulator/emulator @SIGECAD_Pixel_8_API_36

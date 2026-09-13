@@ -31,6 +31,9 @@ canônica para regras de segurança, arquitetura, estrutura e comandos de valida
   oficial, sem logar URL/hash; PDF tem limite de 8 MB e o cache temporário é
   removido após compartilhar. Atestado respeita o bloqueio da UFGD e o formulário
   Planos usam somente `peID` devolvido pela sessão em GET fixo; IDs livres são recusados.
+- A troca entre SIGECAD e Cartão consulta a origem real da WebView e espera o DOM
+  completo. O app confirma o `onLoadEnd`, ignora callbacks atrasados e altera a
+  `source` em cada navegação explícita antes de liberar qualquer ponte.
 - Performance visual: manter imports por peso da IBM Plex e por arquivo da Lucide;
   importar os barrels completos volta a incluir catálogos inteiros no bundle.
 - Android Expo Go: o fluxo público foi validado no perfil Galaxy S24 Ultra

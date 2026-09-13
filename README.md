@@ -75,6 +75,10 @@ plano usa o `peID` retornado pela sessão em um GET fixo do relatório, segue ap
 redirect assinado para o Webdoc oficial e nunca aceita URL ou ID livre da interface.
 Os planos são separados por semestre, com o período atual no topo e os anteriores
 em ordem decrescente.
+Antes de reutilizar uma origem guardada, o app consulta a origem que a WebView
+está executando. Uma troca entre Cartão e SIGECAD só libera consultas depois que
+o `onLoadEnd` corresponde à origem real e o DOM termina de carregar. Eventos
+atrasados de uma página anterior são ignorados.
 O número completo do cartão fica somente em memória para gerar o código
 de barras; a foto mantém a maior resolução validada sem abrir modal, e o RGA só é
 copiado ao clipboard após toque explícito. O Cartão mostra refeições restantes e
@@ -130,9 +134,10 @@ Auditoria atual:
 
 - Python: nenhuma vulnerabilidade conhecida em `requirements.txt` pelo `pip-audit`.
 - Expo: nenhuma vulnerabilidade alta/crítica; Expo Doctor passa 18/18.
-- Android: abertura, CAS oficial, teclado e orientação validados no Expo Go 54.0.8
-  em um Pixel 8 virtual com API 36; a Home autenticada e o modo escuro também
-  foram observados com dados reais da própria conta.
+- Android: APK assinado 0.3.9 validado no AVD Galaxy S24 Ultra ARM64, API 36,
+  1440×3120 e 505 dpi. Login, logout, reinício, rotação, Home, telas acadêmicas,
+  preferências, atualização, falha e recuperação de rede funcionaram sem abrir
+  navegador. Atestado, histórico e plano abriram a folha nativa de compartilhar.
 - Firebase Functions: advisories moderados permanecem em dependências upstream;
   a versão corrigida sugerida de `firebase-admin` ainda não é aceita pelo peer
   oficial de `firebase-functions`, portanto não foi forçada.

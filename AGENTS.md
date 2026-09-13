@@ -72,6 +72,10 @@ backend Firebase device-sentinel.
   `peID` devolvido por `/rest/planosensino` no GET fixo de relatório; nunca aceitar
   ID, caminho ou URL livre da UI. A tela agrupa os planos por período, fixa o
   semestre atual primeiro e ordena os demais do mais recente para o mais antigo.
+- Antes de reutilizar uma origem registrada em memória, consultar a origem real
+  da WebView e exigir DOM completo. O `onLoadEnd` deve ser confirmado pela mesma
+  página antes de resolver uma troca. Cada navegação explícita entre SIGECAD e
+  Cartão precisa alterar a `source`; eventos atrasados nunca liberam a ponte.
 - A ponte Cartão deriva ID/hash da própria página e retorna foto validada, final
   mascarado, o número completo estritamente validado para Code 128, saldos e até
   40 movimentações por origem/página. Tudo fica em memória; nunca logar o número.
@@ -179,13 +183,15 @@ build limpo. Nesta máquina, Docker pode não estar instalado.
 
 ## Estado automatizado verificado em 12/09/2026
 
-- APK local 0.3.8: `assembleRelease` assinado com `app/sigecad-release.keystore`,
+- APK local 0.3.9: `assembleRelease` assinado com `app/sigecad-release.keystore`,
   arm64-v8a, R8 e libs compactadas. A WebView nasce sem suporte a múltiplas
   janelas, bloqueia subframes não HTTPS e destrói popups temporários. A
   `MainApplication` e a `MainActivity` recusam saída HTTP/HTTPS; o portal fica
   oculto antes do primeiro desenho. Instalação e abertura foram validadas no AVD
   1440×3120/505 dpi sem iniciar Activity de navegador. O nome SIGECAD aparece
-  completo no cabeçalho de login desse perfil.
+  completo no cabeçalho de login desse perfil. Login, logout, reinício, rotação,
+  atualização, modo offline e recuperação passaram. Atestado, histórico e plano
+  de ensino abriram a folha nativa do Android sem exibir o portal ou o navegador.
   Push/background seguem desativados até o projeto Firebase real.
 
 - Python: 28/28 testes.
