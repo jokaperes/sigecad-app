@@ -61,9 +61,10 @@ const CAS_URL =
 const REQUEST_TIMEOUT_MS = 15_000;
 const DOCUMENT_TIMEOUT_MS = 45_000;
 const PERIOD_CACHE_TTL_MS = 5 * 60_000;
-const ACADEMIC_BRIDGE_REVISION = "academic-v5";
+const ACADEMIC_BRIDGE_REVISION = "academic-v6";
 const CARD_BRIDGE_REVISION = "card-v1";
 const NAV_READY_CHANNEL = "sigecad-nav-ready-v1";
+const ORIGIN_PROBE_CHANNEL = "sigecad-origin-probe-v1";
 const NAV_READY_SCRIPT = `
 (function () {
   try {
@@ -129,6 +130,20 @@ interface NavigationWait {
   timeout: ReturnType<typeof setTimeout>;
 }
 
+interface OriginProbe {
+  id: string;
+  resolve(state: OriginState): void;
+  reject(error: Error): void;
+  timeout: ReturnType<typeof setTimeout>;
+}
+
+interface OriginState {
+  origin: string | null;
+  path: string | null;
+  ticket: boolean;
+  complete: boolean;
+}
+
 const PortalSessionContext = createContext<PortalSessionValue | null>(null);
 
 export function usePortalSession(): PortalSessionValue {
@@ -143,6 +158,9 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   const pendingDocuments = useRef(new Map<string, PendingDocument>());
   const currentOrigin = useRef<string | null>(null);
   const navigationWait = useRef<NavigationWait | null>(null);
+  const originProbe = useRef<OriginProbe | null>(null);
+  const originProbeCounter = useRef(0);
+  const navigationCounter = useRef(0);
   const operationQueue = useRef<Promise<void>>(Promise.resolve());
   const requestCounter = useRef(0);
   const connecting = useRef(false);
@@ -177,6 +195,11 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       item.reject(reason);
     }
     pendingDocuments.current.clear();
+    if (originProbe.current) {
+      clearTimeout(originProbe.current.timeout);
+      originProbe.current.reject(reason);
+      originProbe.current = null;
+    }
   }, []);
 
   const beginLogin = useCallback((clearCookies: boolean) => {
@@ -196,6 +219,7 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       ticketSettle.current = null;
     }
     requestCounter.current = 0;
+    navigationCounter.current = 0;
     periodCache.current = null;
     installedBridge.current = null;
     const openLogin = () => {
@@ -216,28 +240,51 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
 
   const continueOffline = useCallback(() => setPhase("offline"), []);
 
-  const ensureOrigin = useCallback((origin: string) => {
-    if (currentOrigin.current === origin) return Promise.resolve();
-    if (!webView.current || navigationWait.current) {
+  const navigateInsideApp = useCallback((url: string) => {
+    const destination = new URL(url);
+    destination.hash = `sigecad-native-${++navigationCounter.current}`;
+    setBrowserUri(destination.toString());
+  }, []);
+
+  const probeOrigin = useCallback(() => {
+    if (!webView.current || originProbe.current) {
       return Promise.reject(new PortalBridgeError("Navegador do portal indisponível.", "protocol"));
     }
-    return new Promise<void>((resolve, reject) => {
+    const id = `origin-${++originProbeCounter.current}`;
+    return new Promise<OriginState>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        originProbe.current = null;
+        reject(new PortalBridgeError("O portal não confirmou a página atual.", "timeout"));
+      }, 2_000);
+      originProbe.current = { id, resolve, reject, timeout };
+      webView.current?.injectJavaScript(
+        `(function(){var current=new URL(window.location.href);window.ReactNativeWebView.postMessage(JSON.stringify({channel:${JSON.stringify(ORIGIN_PROBE_CHANNEL)},id:${JSON.stringify(id)},ready:document.readyState==="complete",path:current.pathname,ticket:current.searchParams.has("ticket")}));})(); true;`,
+      );
+    });
+  }, []);
+
+  const ensureOrigin = useCallback(async (origin: string) => {
+    const destination = origin === CARD_ORIGIN ? CARD_URL : SIGECAD_HOME;
+    const destinationPath = new URL(destination).pathname;
+    try {
+      const detected = await probeOrigin();
+      currentOrigin.current = detected.complete ? detected.origin : null;
+      if (detected.complete && detected.origin === origin && detected.path === destinationPath && !detected.ticket) return;
+    } catch {
+      currentOrigin.current = null;
+    }
+    if (!webView.current || navigationWait.current) {
+      throw new PortalBridgeError("Navegador do portal indisponível.", "protocol");
+    }
+    await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
         navigationWait.current = null;
         reject(new PortalBridgeError("O portal demorou demais para abrir.", "timeout"));
       }, REQUEST_TIMEOUT_MS);
       navigationWait.current = { origin, resolve, reject, timeout };
-      const destination = origin === CARD_ORIGIN ? CARD_URL : SIGECAD_HOME;
-      // Updating `source` is reliable even while WKWebView is covered by the
-      // native app. Injected location changes can be deferred indefinitely by
-      // iOS for an off-screen/transparent page, which used to cost 15 seconds.
-      // A Fast Refresh/process restoration can preserve `source` while refs
-      // that tracked the loaded origin are rebuilt. Setting the same URI is a
-      // React no-op, so explicitly reload it to complete the ready handshake.
-      if (browserUri === destination) webView.current?.reload();
-      else setBrowserUri(destination);
+      navigateInsideApp(destination);
     });
-  }, [browserUri]);
+  }, [navigateInsideApp, probeOrigin]);
 
   const injectRequest = useCallback((kind: BridgeKind, numericId?: number) => {
     if (!webView.current) {
@@ -366,8 +413,6 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
 
   const shareDocument = useCallback((input: AcademicDocumentRequest) => {
     const result = operationQueue.current.then(async () => {
-      setDocumentSurface(true);
-      await new Promise<void>((resolve) => setTimeout(resolve, 80));
       try {
         await ensureOrigin(SIGECAD_ORIGIN);
         const base64 = await injectDocumentRequest(input);
@@ -464,18 +509,33 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   }
 
   function onLoadStart(url: string) {
+    currentOrigin.current = null;
     coverAcademicNavigation(url);
     if (hasCasServiceTicket(url)) abortInFlightBridge();
   }
 
-  function onLoadEnd(url: string) {
+  async function onLoadEnd(url: string, attempt = 0) {
+    const eventOrigin = safeHttpsOrigin(url);
+    if (eventOrigin === SIGECAD_ORIGIN || eventOrigin === CARD_ORIGIN) {
+      try {
+        const eventLocation = new URL(url);
+        const detected = await probeOrigin();
+        if (detected.origin !== eventOrigin || detected.path !== eventLocation.pathname ||
+          detected.ticket !== eventLocation.searchParams.has("ticket")) return;
+        if (!detected.complete) {
+          if (attempt < 30) setTimeout(() => { void onLoadEnd(url, attempt + 1); }, 100);
+          return;
+        }
+      } catch {
+        return;
+      }
+    }
     markOriginReady(url);
   }
 
   function loadSessionUrlInsideApp(url: string) {
     coverAcademicNavigation(url);
-    if (browserUri === url) webView.current?.reload();
-    else setBrowserUri(url);
+    navigateInsideApp(url);
   }
 
   function onOpenWindow(event: { nativeEvent: { targetUrl: string } }) {
@@ -493,9 +553,33 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       return;
     }
     try {
-      const perf = JSON.parse(event.nativeEvent.data) as { channel?: unknown; ready?: unknown; stage?: unknown; elapsed?: unknown };
+      const perf = JSON.parse(event.nativeEvent.data) as {
+        channel?: unknown;
+        id?: unknown;
+        path?: unknown;
+        ready?: unknown;
+        stage?: unknown;
+        ticket?: unknown;
+        elapsed?: unknown;
+      };
+      if (perf.channel === ORIGIN_PROBE_CHANNEL && typeof perf.id === "string") {
+        const item = originProbe.current;
+        if (item?.id === perf.id) {
+          clearTimeout(item.timeout);
+          originProbe.current = null;
+          const path = typeof perf.path === "string" && perf.path.length <= 300 &&
+            /^\/[A-Za-z0-9_./%~-]*$/.test(perf.path) ? perf.path : null;
+          item.resolve({
+            origin: safeHttpsOrigin(event.nativeEvent.url),
+            path,
+            ticket: perf.ticket === true,
+            complete: perf.ready === true,
+          });
+        }
+        return;
+      }
       if (perf.channel === NAV_READY_CHANNEL && perf.ready === true) {
-        markOriginReady(event.nativeEvent.url);
+        coverAcademicNavigation(event.nativeEvent.url);
         return;
       }
       const allowedStages = [
@@ -539,6 +623,10 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   function handleDocumentMessage(message: DocumentBridgeMessage) {
     const item = pendingDocuments.current.get(message.id);
     if (!item) return;
+    if (message.type === "navigation-ready") {
+      setDocumentSurface(true);
+      return;
+    }
     if (message.type === "error") {
       clearTimeout(item.timeout);
       pendingDocuments.current.delete(message.id);
@@ -653,6 +741,7 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   const showLoginChrome = phase === "login" || phase === "error";
   const coveringPortal = phase === "connecting";
   const liveDocumentSurface = showContent && documentSurface;
+  const browserSource = useMemo(() => ({ uri: browserUri }), [browserUri]);
   const hiddenBrowserStyle = Platform.OS === "android"
     ? (liveDocumentSurface ? styles.documentBrowserAndroid : styles.hiddenBrowserAndroid)
     : styles.hiddenBrowser;
@@ -689,12 +778,12 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
         <WebView
           key={webKey}
           ref={webView}
-          source={{ uri: browserUri }}
+          source={browserSource}
           pointerEvents={showLoginChrome ? "auto" : "none"}
           style={showContent ? hiddenBrowserStyle : styles.browser}
           containerStyle={showContent ? hiddenBrowserStyle : styles.browserContainer}
           onLoadStart={(event) => onLoadStart(event.nativeEvent.url)}
-          onLoadEnd={(event) => onLoadEnd(event.nativeEvent.url)}
+          onLoadEnd={(event) => { void onLoadEnd(event.nativeEvent.url); }}
           onOpenWindow={onOpenWindow}
           onMessage={onMessage}
           injectedJavaScriptBeforeContentLoaded={NAV_READY_SCRIPT}

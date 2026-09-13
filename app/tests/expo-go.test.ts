@@ -120,10 +120,26 @@ await check("telas secundárias distinguem carregamento e não truncam notas", (
   assert(source.includes('item.stage||null'), "etapa da matrícula não é exibida");
 });
 
-await check("ponte recarrega a mesma origem após restauração", () => {
+await check("ponte confirma e troca a origem real após restauração", () => {
   const source = readFileSync(portalSessionSourcePath, "utf8");
-  assert(source.includes('if (browserUri === destination) webView.current?.reload()'));
-  assert(source.includes('}, [browserUri]);'));
+  assert(source.includes('const ORIGIN_PROBE_CHANNEL = "sigecad-origin-probe-v1"'));
+  assert(source.includes("const detected = await probeOrigin()"));
+  assert(source.includes("currentOrigin.current = detected.complete ? detected.origin : null"));
+  assert(source.includes("detected.path === destinationPath && !detected.ticket"));
+  assert(source.includes('ready:document.readyState==="complete"'));
+  assert(source.includes('path:current.pathname,ticket:current.searchParams.has("ticket")'));
+  assert(source.includes("origin: safeHttpsOrigin(event.nativeEvent.url)"));
+  assert(source.includes("detected.path !== eventLocation.pathname"));
+  assert(source.includes("complete: perf.ready === true"));
+  assert(source.includes("void onLoadEnd(url, attempt + 1)"));
+  assert(source.includes('destination.hash = `sigecad-native-${++navigationCounter.current}`'));
+  assert(source.includes('navigateInsideApp(destination)'));
+  assert(source.includes('}, [navigateInsideApp, probeOrigin]);'));
+  assert(source.includes('navigateInsideApp(url);'));
+  assert(source.includes("currentOrigin.current = null;\n    coverAcademicNavigation(url);"));
+  assert(source.includes('webviewDebuggingEnabled={false}'));
+  assert(source.includes('onLoadEnd={(event) => { void onLoadEnd(event.nativeEvent.url); }}'));
+  assert(!source.includes("markOriginReady(event.nativeEvent.url);\n        return;\n      }\n      const allowedStages"));
 });
 
 await check("login começa no CAS e só conecta depois do SIGECAD", () => {
@@ -339,6 +355,10 @@ await check("download assinado aceita somente o Webdoc oficial e parâmetros est
     channel: DOCUMENT_BRIDGE_CHANNEL, id: "doc-9", type: "signed-url", url: valid,
   }));
   assert(signed?.type === "signed-url" && signed.url === valid);
+  const ready = parseDocumentBridgeMessage(JSON.stringify({
+    channel: DOCUMENT_BRIDGE_CHANNEL, id: "doc-9", type: "navigation-ready",
+  }));
+  assert(ready?.type === "navigation-ready");
   assert(parseDocumentBridgeMessage(JSON.stringify({
     channel: DOCUMENT_BRIDGE_CHANNEL, id: "doc-9", type: "signed-url",
     url: valid.replace("webdoc.app.ufgd.edu.br", "attacker.invalid"),
@@ -361,7 +381,8 @@ await check("ponte de documentos usa GET, PDF autenticado e registros internos",
   assert(BRIDGE_BOOTSTRAP.includes("captureSignedDocument"));
   assert(BRIDGE_BOOTSTRAP.includes("isSignedWebdoc"));
   assert(BRIDGE_BOOTSTRAP.includes("type: \"signed-url\""));
-  assert(BRIDGE_BOOTSTRAP.includes("__SIGECAD_BRIDGE_VERSION__ = 5"));
+  assert(BRIDGE_BOOTSTRAP.includes('type: "navigation-ready"'));
+  assert(BRIDGE_BOOTSTRAP.includes("__SIGECAD_BRIDGE_VERSION__ = 6"));
   assert(BRIDGE_BOOTSTRAP.includes('"/graduacao/relatorios/planoensino?peID=" + request.planId'));
   assert(BRIDGE_BOOTSTRAP.includes("teachingPlanIds.has(request.planId)"));
   assert(!BRIDGE_BOOTSTRAP.includes("postOnlyPlan"));
@@ -377,6 +398,8 @@ await check("Webdoc assinado é interceptado sem navegar nem expor parâmetros",
   assert(source.includes('item.kind === "teaching-plan"'));
   assert(source.includes("return false;"));
   assert(source.includes("consumeSignedDocumentUrl"));
+  assert(source.includes("const browserSource = useMemo(() => ({ uri: browserUri }), [browserUri]);"));
+  assert(source.includes("source={browserSource}"));
   assert(source.includes("documentBrowserAndroid"));
   assert(source.includes("Preparando o PDF oficial"));
   assert(source.includes("onFileDownload={(event) => { consumeSignedDocumentUrl(event.nativeEvent.downloadUrl); }}"));
