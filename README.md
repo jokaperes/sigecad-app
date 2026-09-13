@@ -1,28 +1,105 @@
-# SIGECAD Alerta
+# SIGECAD
 
-Notificador independente e somente leitura para alunos da UFGD. O projeto detecta
-publicação ou alteração de notas, faltas e resultados no SIGECAD sem armazenar o
-valor das notas nos snapshots.
+Aplicativo independente para alunos da UFGD consultarem dados acadêmicos e do
+cartão em uma interface mobile. O projeto também inclui ferramentas opcionais
+para detectar mudanças em notas e enviar alertas.
 
-> Não é um produto oficial da UFGD. Use apenas com a própria conta e respeite os
-> serviços da universidade: sem enumeração de IDs, sem acesso a terceiros e com
-> intervalos de consulta de pelo menos uma hora.
+Este não é um produto oficial da UFGD. Use somente com a própria conta.
 
-## Modos disponíveis
+## Estado atual
 
-| Modo | Onde o token fica | Notificação | Estado |
-|---|---|---|---|
-| Expo Go no iPhone/Android | WebView privada; cookie nunca é extraído | Atualização ao abrir/puxar | Design completo, dados acadêmicos e cartão no SDK 57 |
-| Mobile device-sentinel | Keychain/Keystore do aluno | Push Firebase | Código implementado; integração real ainda não validada |
-| Self-host pessoal | `.env` da própria máquina | Aviso genérico (email) ou console | Pronto; o token vive na sua máquina |
-| Servidor central | SQLite, token cifrado em repouso e **claro no poll** | Aviso genérico | Isolado (`compose --profile central`). Não é zero-knowledge |
-| CLI local | Variável `SIGECAD_TOKEN` | Saída no terminal | Pronto |
+- App Android 0.3.9, Expo SDK 57, React Native 0.86 e React 19.2.
+- Login oficial da UFGD dentro de uma WebView privada.
+- Dashboard com início, notas, faltas, horários, histórico, grade, matrícula,
+  documentos acadêmicos, perfil e cartão UFGD.
+- APK arm64-v8a assinado para Android.
+- Notificações em segundo plano estão desativadas até a integração com um projeto
+  Firebase real.
+- CLI, self-host pessoal e servidor central continuam disponíveis como modos
+  opcionais.
 
-O objetivo de privacidade é o modo mobile: o token nunca sai do aparelho. O modo
-central continua disponível para deploy controlado, mas quem controla a máquina e
-a chave mestra consegue decifrar tokens durante o poll. Veja [ARCHITECTURE.md](ARCHITECTURE.md).
+## Regras de segurança
 
-## Uso local rápido
+- Acesse somente a conta autorizada pelo próprio usuário.
+- Faça apenas requisições GET aos serviços da UFGD.
+- Nunca varie IDs, códigos ou hashes para tentar acessar dados de terceiros.
+- Nunca registre ou envie senha, cookie, token, CPF, foto, URL assinada ou resposta
+  acadêmica completa.
+- Mantenha `raw/`, `.env`, `state.json`, bancos, credenciais e capturas fora do Git.
+- Não desative TLS nem use `verify=False`.
+- Consultas automáticas devem respeitar intervalo mínimo de uma hora.
+- Não faça testes ao vivo na UFGD sem autorização explícita. Use fixtures e fakes.
+
+## App mobile
+
+O login começa no CAS oficial. Credenciais e captcha são preenchidos na página da
+UFGD e não passam pelo código React Native. O CAS, o provedor oficial gov.br e o
+SIGECAD permanecem na mesma WebView.
+
+No Android, o app desativa múltiplas janelas, trata `window.open` e
+`target=_blank` na própria WebView, reescreve o destino HTTP legado do SIGECAD
+para HTTPS e bloqueia intents HTTP, HTTPS e `intent:`. O navegador externo e o
+site acadêmico não devem aparecer depois do login. Quando a sessão fica pronta,
+o dashboard nativo cobre a WebView.
+
+A ponte acadêmica aceita somente origens oficiais e uma lista fixa de rotas GET.
+IDs de período, matrícula, plano e cartão sempre vêm da sessão autenticada. A
+interface não fornece caminhos ou URLs livres.
+
+Os dados acadêmicos, a foto, os saldos, o número do cartão e os extratos ficam em
+memória. O armazenamento local recebe somente hashes, estado de publicação,
+rótulos necessários, horário da consulta e preferências visuais. O número do
+cartão é validado e usado localmente para gerar Code 128.
+
+Histórico, atestado e planos de ensino só são baixados após ação do usuário. O app
+aceita apenas o Webdoc oficial, valida assinatura e tamanho do PDF, abre a folha
+nativa de compartilhar e apaga o arquivo temporário depois.
+
+O runtime nativo contém a base do device-sentinel com SecureStore, Firebase App
+Check, Functions e FCM. A flag `app/src/native/sentinelFlag.ts` permanece falsa
+enquanto não houver configuração Firebase de produção e teste em aparelhos reais.
+O fluxo coletivo detecta criação ou publicação de avaliação. Ele não detecta
+faltas nem correção de uma nota já publicada.
+
+## Desenvolvimento do app
+
+Requer Node.js 22.
+
+```bash
+cd app
+npm ci
+npm run start:go
+```
+
+Validação:
+
+```bash
+cd app
+npm test
+npm run typecheck
+npm run doctor
+```
+
+Build Android local requer JDK 21 e Android SDK configurados:
+
+```bash
+cd app
+npx expo prebuild -p android
+cd android
+./gradlew assembleRelease
+```
+
+O APK é gerado em
+`app/android/app/build/outputs/apk/release/app-release.apk`. A assinatura usa
+`app/sigecad-release.keystore`, alias `sigecad`. As senhas ficam apenas no
+`app/android/gradle.properties`, que não entra no Git.
+
+O arquivo `app/google-services.json` atual não habilita notificações para usuários
+reais. Para ativar push, configure um projeto Firebase, substitua os arquivos
+Google Services, habilite App Check, implante as Functions e valide em Android e
+iOS físicos antes de ativar o sentinela.
+
+## Python e self-host
 
 ```bash
 python3 -m venv server/.venv
@@ -30,159 +107,61 @@ server/.venv/bin/pip install -r server/requirements.txt
 
 export SIGECAD_TOKEN='UFGDNET=...'
 python3 sigecad.py --show-grades
-python3 sigecad.py --show-card --photo-out /tmp/minha-foto.jpg
-python3 sigecad.py                 # snapshot + diff
+python3 sigecad.py --show-card
+python3 sigecad.py
 ```
 
-`--show-grades` e `--show-card` mantêm os valores apenas em memória. O modo de
-monitoramento persiste somente hashes e rótulos em `state.json` (permissão `0600`).
-
-Para alertas contínuos na própria máquina:
+O monitor salva hashes em `state.json`. Para executar continuamente na própria
+máquina:
 
 ```bash
 cp server/.env.example .env
-# preencha SIGECAD_TOKEN, NOTIFY_EMAIL e, opcionalmente, Resend
 docker compose up -d personal
 ```
 
-Detalhes em [SELF-HOSTING.md](SELF-HOSTING.md).
+Sem Resend, os eventos aparecem no console. O serviço central opcional usa token
+cifrado no SQLite, mas o decifra em memória durante cada consulta. Quem controla a
+máquina e a chave mestra consegue acessar o token.
 
-## App mobile
-
-O app usa Expo SDK 57, React Native 0.86 e React 19.2 e possui dois runtimes. No
-Expo Go, a WebView privada abre primeiro o CAS oficial; o login, o redirect (inclusive
-o provedor oficial gov.br) e o cookie permanecem dentro do app. Depois do login o
-site do SIGECAD não é exibido: o dashboard nativo assume a sessão no aparelho. No
-Android, novas janelas do login são forçadas a navegar na mesma WebView. O cliente
-nativo bloqueia qualquer entrega para navegador externo e recusa esquemas, portas
-e hosts fora da lista oficial. A WebView já nasce sem suporte a múltiplas janelas,
-e a `MainApplication` e a `MainActivity` recusam intents HTTP/HTTPS como barreira
-final. O redirect HTTP
-legado do SIGECAD é reescrito para HTTPS na mesma WebView, e o documento do portal
-acadêmico fica oculto antes do primeiro desenho. Uma ponte de mesma
-origem com allowlist fixa consulta períodos, turmas, notas, faltas, horários,
-matrícula, histórico, estrutura, carga horária, perfil e operações acadêmicas,
-sempre por GET e somente com IDs devolvidos pela própria sessão. A mesma WebView
-navega ao portal Cartão para mostrar foto validada por assinatura JPEG/PNG,
-saldos RU/Cantina, Code 128 local confirmado contra a impressão autenticada
-oficial e extratos paginados sem expor o cookie. Falhas da foto têm
-retry/fallback sanitizado, e o Perfil oferece diagnóstico agregado sem dados
-pessoais. `Perfil > Documentos acadêmicos` compartilha o histórico escolar oficial
-e informa a disponibilidade de atestado e planos de ensino; o PDF validado fica em arquivo
-temporário apenas durante a folha nativa de compartilhar/salvar e é apagado em
-seguida. Atestado respeita o bloqueio acadêmico informado pela própria UFGD. Cada
-plano usa o `peID` retornado pela sessão em um GET fixo do relatório, segue apenas o
-redirect assinado para o Webdoc oficial e nunca aceita URL ou ID livre da interface.
-Os planos são separados por semestre, com o período atual no topo e os anteriores
-em ordem decrescente.
-Antes de reutilizar uma origem guardada, o app consulta a origem que a WebView
-está executando. Uma troca entre Cartão e SIGECAD só libera consultas depois que
-o `onLoadEnd` corresponde à origem real e o DOM termina de carregar. Eventos
-atrasados de uma página anterior são ignorados.
-O número completo do cartão fica somente em memória para gerar o código
-de barras; a foto mantém a maior resolução validada sem abrir modal, e o RGA só é
-copiado ao clipboard após toque explícito. O Cartão mostra refeições restantes e
-recarga exata; Cantina usa R$ 2,00 por refeição. A interface implementa as variantes do design
-Claude (Cards/Lista/Agenda e Barras/Alertas), tema claro/escuro e estados reais de
-carregamento, sessão e rede. O resumo de “Próxima aula” mostra o dia, a sala e o
-intervalo completo da aula (início–fim). No
-development build com Firebase configurado, Firebase App Check, Functions e FCM
-ativam o fluxo device-sentinel em segundo plano. Enquanto o `google-services.json`
-real não existir, o APK nativo roda a mesma interface acadêmica do Expo Go e o
-painel nativo de alertas permanece desativado.
-
-### APK Android local
+## Testes do projeto
 
 ```bash
-cd app
-export JAVA_HOME="$HOME/tools/jdk-21.0.12.1+1/Contents/Home"   # JDK 21 portátil
-export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
-npx expo prebuild -p android
-cd android && ./gradlew assembleRelease
-```
+python3 -m unittest discover -s tests -v
+python3 -m compileall -q sigecad.py personal.py server tests
 
-O APK sai em `android/app/build/outputs/apk/release/app-release.apk`. A
-assinatura usa `app/sigecad-release.keystore` (alias `sigecad`); usuário e senha
-ficam apenas em `android/gradle.properties`, que é ignorado pelo git. O
-`app/google-services.json` é um placeholder que só permite compilar; substitua
-pelo arquivo real para habilitar push/alertas.
-
-```bash
 cd app
-npm ci
 npm test
 npm run typecheck
 npm run doctor
-npm run start:go
+
+cd ../functions
+npm test
 ```
 
-Abra o QR no Expo Go do iPhone ou Android. `Perfil > Notas e matrícula` é uma visão dos dados
-atuais, atualizada em foreground; não é uma caixa de push. Alertas com o app
-fechado exigem development build, arquivos Google Services, App Check e Functions
-implantadas. Consulte [app/README.md](app/README.md) e o roteiro completo de teste
-em [app/TESTING.md](app/TESTING.md).
-
-## Testes e verificações
-
-```bash
-python3 -m unittest discover -s tests -v       # 28 testes
-cd app && npm test && npm run typecheck        # 78 testes + TypeScript strict
-cd ../functions && npm test                    # build + 5 testes de policy
-```
-
-Auditoria atual:
-
-- Python: nenhuma vulnerabilidade conhecida em `requirements.txt` pelo `pip-audit`.
-- Expo: nenhuma vulnerabilidade alta/crítica; Expo Doctor passa 18/18.
-- Android: APK assinado 0.3.9 validado no AVD Galaxy S24 Ultra ARM64, API 36,
-  1440×3120 e 505 dpi. Login, logout, reinício, rotação, Home, telas acadêmicas,
-  preferências, atualização, falha e recuperação de rede funcionaram sem abrir
-  navegador. Atestado, histórico e plano abriram a folha nativa de compartilhar.
-- Firebase Functions: advisories moderados permanecem em dependências upstream;
-  a versão corrigida sugerida de `firebase-admin` ainda não é aceita pelo peer
-  oficial de `firebase-functions`, portanto não foi forçada.
+O CI executa essas verificações em pushes para `main` e em pull requests.
 
 ## Estrutura
 
 ```text
-sigecad.py                 core Python, CLI, notas, cartão, snapshot e diff
-personal.py                loop self-host de um aluno
-server/                    serviço central: auth, cripto, SQLite, poll e Resend
-tests/                     testes Python
-app/
-  App.tsx                  seleciona Expo Go ou runtime nativo sem importar módulos incompatíveis
-  app.config.js            inclui Google Services apenas quando os arquivos locais existem
-  src/expo-go/             sessão WebView, allowlist, dados do portal e dashboard
-  src/expo-go/design/      sistema visual IBM Plex, telas, variantes e dark mode
-  assets/                  ícone Expo e fontes oficiais UFGD/UFGDNet
-  src/native/              login, consentimento, push e painel do development build
-  src/runtime/             detecção de capacidades do runtime
-  src/auth/                token seguro usado somente pelo runtime nativo
-  src/core/                cliente, visão acadêmica, snapshot, hashes e diff
-  src/sentinel/            ciclo disparado por silent push
-  src/backend/             App Check, Auth e Cloud Functions
-  src/push/                cadastro e handlers FCM
-  src/storage/             snapshots e registro local
-  src/ui/                  componentes e tema
-  tests/                   core, ciclo do sentinela e segurança da ponte Expo Go
-functions/
-  src/index.ts             callables, quórum, fan-out, scheduler e exclusão LGPD
-  src/policy.ts            validações puras compartilhadas/testadas
-  tests/                   testes de policy
-raw/                       capturas privadas locais; ignoradas e nunca publicadas
+sigecad.py             cliente e monitor Python
+personal.py            loop self-host de um aluno
+server/                autenticação, criptografia, SQLite, poll e Resend
+tests/                 testes Python
+app/                   aplicativo Expo e projeto Android
+app/src/expo-go/       sessão WebView, bridge, dados e interface acadêmica
+app/src/native/        login e base do device-sentinel
+app/src/core/          snapshot, hashes e diff
+functions/             Firebase Functions, quórum e envio de push
+raw/                   fixtures privadas locais, fora de commits e releases
 ```
 
-Cloud Functions está configurado para o runtime Node.js 22.
+## Limitações conhecidas
 
-Mapas, identidade e operação: [API-MAP.md](API-MAP.md), [ROUTES.md](ROUTES.md),
-[CARTAO-MAP.md](CARTAO-MAP.md), [MOBILE.md](MOBILE.md),
-[ASSETS.md](ASSETS.md), [PRIVACY.md](PRIVACY.md) e [server/README.md](server/README.md).
+- Push e trabalho em segundo plano ainda dependem da configuração Firebase real.
+- Silent push é best-effort e pode atrasar, especialmente no iOS após force-quit.
+- Os portais da UFGD podem mudar rotas, HTML e comportamento sem aviso.
+- O portal do cartão pode ficar indisponível. O app deve mostrar erro sem repetir
+  consultas agressivamente.
+- O servidor central não é zero-knowledge.
 
-## Segurança
-
-- Nunca coloque senha, token, cookies, fotos, `state.json`, banco ou capturas em Git.
-- `raw/` contém dados pessoais reais e deve permanecer local, com permissão `0600`.
-- O token é bearer: quem o possui acessa a conta. Revogue/troque se for exposto.
-- Relate falhas à UFGD; não teste IDs, hashes ou contas de outras pessoas.
-
-Software proprietário. Todos os direitos reservados. Veja [LICENSE](LICENSE).
+Software proprietário. Todos os direitos reservados. Consulte `LICENSE`.

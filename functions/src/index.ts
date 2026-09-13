@@ -5,7 +5,7 @@
  * acordar cada device (pushToken), e o último `stateHash` conhecido por turma.
  * O device faz o poll com o token LOCAL, calcula o diff/stateHash e reporta.
  *
- * Segurança (ver ARCHITECTURE.md › "Modelo de confiança"):
+ * Segurança:
  *   - App Check obrigatório nas callables  -> mata curl/APK adulterado (camada 2)
  *   - quórum de K devices no mesmo stateHash -> mata app-genuíno-mentindo (camada 3)
  *   - Firestore rules negam escrita direta do cliente (só via estas functions)

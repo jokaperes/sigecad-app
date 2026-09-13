@@ -11,7 +11,7 @@ import {
 } from "../storage/asyncStorage";
 
 /**
- * Cadastro do device (Fase 1 do ARCHITECTURE.md):
+ * Cadastro do device:
  *  1. auth anônimo (uid) + permissão de push + pushToken (FCM)
  *  2. descobre as turmas do aluno pollando UMA vez com o token local
  *  3. manda ao servidor SÓ { pushToken, email, turmas } — sem token, sem nota

@@ -34,7 +34,7 @@ def _valid_email(value):
 
 def _add(email, token, consent):
     if not consent:
-        sys.exit("Cadastro exige consentimento explícito (--consent). Ver PRIVACY.md.")
+        sys.exit("Cadastro exige consentimento explícito (--consent).")
     # valida o token e descobre as turmas do aluno
     try:
         items, _ = sigecad.snapshot(sigecad.Client(token))
