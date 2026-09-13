@@ -1,4 +1,5 @@
 # Segredos e dados pessoais — NUNCA commitar
+AGENTS.md
 raw/
 state.json
 server/.venv/
