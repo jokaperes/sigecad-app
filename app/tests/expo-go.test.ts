@@ -119,14 +119,15 @@ await check("ponte confirma e troca a origem real após restauração", () => {
   const source = readFileSync(portalSessionSourcePath, "utf8");
   assert(source.includes('const ORIGIN_PROBE_CHANNEL = "sigecad-origin-probe-v1"'));
   assert(source.includes("const detected = await probeOrigin()"));
+  assert(source.includes("return originProbe.current.promise"));
   assert(source.includes("currentOrigin.current = detected.complete ? detected.origin : null"));
   assert(source.includes("detected.path === destinationPath && !detected.ticket"));
   assert(source.includes('ready:document.readyState==="complete"'));
   assert(source.includes('path:current.pathname,ticket:current.searchParams.has("ticket")'));
   assert(source.includes("origin: safeHttpsOrigin(event.nativeEvent.url)"));
-  assert(source.includes("detected.path !== eventLocation.pathname"));
+  assert(source.includes("markOriginReady(detected)"));
   assert(source.includes("complete: perf.ready === true"));
-  assert(source.includes("void onLoadEnd(url, attempt + 1)"));
+  assert(source.includes("void settleCurrentPage(attempt + 1)"));
   assert(source.includes('destination.hash = `sigecad-native-${++navigationCounter.current}`'));
   assert(source.includes('navigateInsideApp(destination)'));
   assert(source.includes('}, [navigateInsideApp, probeOrigin]);'));
@@ -134,7 +135,8 @@ await check("ponte confirma e troca a origem real após restauração", () => {
   assert(source.includes("currentOrigin.current = null;\n    coverAcademicNavigation(url);"));
   assert(source.includes('webviewDebuggingEnabled={false}'));
   assert(source.includes('onLoadEnd={(event) => { void onLoadEnd(event.nativeEvent.url); }}'));
-  assert(!source.includes("markOriginReady(event.nativeEvent.url);\n        return;\n      }\n      const allowedStages"));
+  assert(source.includes("void settleCurrentPage();"));
+  assert(source.indexOf("if (perf.channel === ORIGIN_PROBE_CHANNEL") < source.indexOf("if (!isBridgeUrl(event.nativeEvent.url)) return;"));
 });
 
 await check("login começa no CAS e só conecta depois do SIGECAD", () => {
@@ -154,7 +156,8 @@ await check("login começa no CAS e só conecta depois do SIGECAD", () => {
   assert(source.includes("KEEP_SESSION_NAVIGATION_SCRIPT"));
   assert(source.includes('root.style.setProperty("visibility", "hidden", "important")'));
   assert(source.includes("Entrando no SIGECAD"));
-  assert(source.includes("A sessão fica só neste aparelho"));
+  assert(!source.includes("A sessão fica só neste aparelho"));
+  assert(!source.includes("Entre no portal oficial dentro do app"));
   assert(source.includes('loginBrandText}>SIGECAD</Text>'));
   assert(source.includes("loginBrandText: { color: \"#17201C\", fontFamily: fonts.monoSemibold, fontSize: 15, letterSpacing: 0.8, minWidth: 92, paddingRight: 12, flexShrink: 0 }"));
 });

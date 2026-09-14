@@ -2,7 +2,7 @@
   "expo": {
     "name": "SIGECAD",
     "slug": "sigecad-notificador",
-    "version": "0.3.9",
+    "version": "0.3.10",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
     "scheme": "sigecad",
@@ -15,7 +15,7 @@
       }
     },
     "android": {
-      "versionCode": 12,
+      "versionCode": 13,
       "package": "br.edu.ufgd.notificador",
       "googleServicesFile": "./google-services.json",
       "allowBackup": false,
@@ -45,7 +45,8 @@
           "ios": { "useFrameworks": "static" }
         }
       ],
-      "./plugins/withPrivacyHardening"
+      "./plugins/withPrivacyHardening",
+      "./plugins/withIosSceneLifecycle"
     ]
   }
 }

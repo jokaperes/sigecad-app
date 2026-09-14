@@ -1,13 +1,21 @@
 export const CAS_ORIGIN = "https://login.app.ufgd.edu.br";
+const LEGACY_CAS_ORIGIN = "http://login.app.ufgd.edu.br";
 export const SIGECAD_ORIGIN = "https://sigecad-academico.app.ufgd.edu.br";
 const LEGACY_SIGECAD_ORIGIN = "http://sigecad-academico.app.ufgd.edu.br";
 export const CARD_ORIGIN = "https://cartao.app.ufgd.edu.br";
 export const WEBDOC_ORIGIN = "https://webdoc.app.ufgd.edu.br";
+export const CLOUDFLARE_CHALLENGE_ORIGIN = "https://challenges.cloudflare.com";
 // IdP oficial usado pelo botão "Entrar com gov.br" da página CAS. Ele pode
 // participar da navegação de autenticação, mas nunca recebe a bridge.
 export const GOV_BR_ORIGIN = "https://sso.acesso.gov.br";
 
-export const SESSION_ORIGINS = [CAS_ORIGIN, SIGECAD_ORIGIN, CARD_ORIGIN, GOV_BR_ORIGIN] as const;
+export const SESSION_ORIGINS = [
+  CAS_ORIGIN,
+  SIGECAD_ORIGIN,
+  CARD_ORIGIN,
+  GOV_BR_ORIGIN,
+  CLOUDFLARE_CHALLENGE_ORIGIN,
+] as const;
 export const BRIDGE_ORIGINS = [SIGECAD_ORIGIN, CARD_ORIGIN] as const;
 // O SIGECAD HTTPS ainda manda o CAS com service=http://sigecad-academico...
 // Se essa origem HTTP não passar no filtro nativo, o react-native-webview
@@ -44,7 +52,7 @@ export function safeHttpsOrigin(value: string): string | null {
 }
 
 export function isAllowedSessionUrl(value: string): boolean {
-  if (value === "about:blank") return true;
+  if (value === "about:blank" || value === "about:srcdoc") return true;
   const origin = safeHttpsOrigin(value);
   return origin !== null && (SESSION_ORIGINS as readonly string[]).includes(origin);
 }
@@ -54,7 +62,7 @@ export function rewriteSessionNavigationUrl(value: string): string | null {
     const url = new URL(value);
     if (url.username || url.password) return null;
     let changed = false;
-    if (url.origin === LEGACY_SIGECAD_ORIGIN) {
+    if (url.origin === LEGACY_CAS_ORIGIN || url.origin === LEGACY_SIGECAD_ORIGIN) {
       url.protocol = "https:";
       changed = true;
     }

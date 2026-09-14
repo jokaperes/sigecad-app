@@ -13,6 +13,7 @@ import {
 import {
   CARD_ORIGIN,
   CAS_ORIGIN,
+  CLOUDFLARE_CHALLENGE_ORIGIN,
   GOV_BR_ORIGIN,
   SESSION_ORIGINS,
   SIGECAD_ORIGIN,
@@ -86,6 +87,9 @@ await check("somente origens da sessão autenticada são permitidas", () => {
   assert(isAllowedSessionUrl(`${SIGECAD_ORIGIN}/`));
   assert(isAllowedSessionUrl(`${CARD_ORIGIN}/cartoes_usuario/visualiza_pessoa`));
   assert(isAllowedSessionUrl(`${GOV_BR_ORIGIN}/authorize`));
+  assert(isAllowedSessionUrl(`${CLOUDFLARE_CHALLENGE_ORIGIN}/turnstile/v0/`));
+  assert(isAllowedSessionUrl("about:blank"));
+  assert(isAllowedSessionUrl("about:srcdoc"));
   assert(!isAllowedSessionUrl("http://login.app.ufgd.edu.br/"));
   assert(!isAllowedSessionUrl("https://evil.ufgd.edu.br/"));
   assert(!isAllowedSessionUrl("https://ufgd.edu.br/"));
@@ -94,14 +98,16 @@ await check("somente origens da sessão autenticada são permitidas", () => {
   assert(!isAllowedSessionUrl("https://accounts.google.com/"));
   assert(!isAllowedSessionUrl(`${WEBDOC_ORIGIN}/gerar`));
   assert(!isBridgeUrl(`${CAS_ORIGIN}/`));
+  assert(!isBridgeUrl(`${CLOUDFLARE_CHALLENGE_ORIGIN}/`));
   assert(isBridgeUrl(`${SIGECAD_ORIGIN}/rest/notas`));
   assert(isLoginUrl(`${CAS_ORIGIN}/?service=x`));
-  assert(SESSION_ORIGINS.length === 4);
+  assert(SESSION_ORIGINS.length === 5);
   assert(WEBVIEW_ORIGIN_WHITELIST.length === 1 && WEBVIEW_ORIGIN_WHITELIST[0] === "*");
 });
 
-await check("redirect HTTP do SIGECAD permanece no app em HTTPS", () => {
+await check("redirects HTTP do CAS e SIGECAD permanecem no app em HTTPS", () => {
   const ticket = "ST-test-ticket";
+  assert(rewriteSessionNavigationUrl("http://login.app.ufgd.edu.br/login") === `${CAS_ORIGIN}/login`);
   assert(rewriteSessionNavigationUrl("http://sigecad-academico.app.ufgd.edu.br/") === `${SIGECAD_ORIGIN}/`);
   assert(
     rewriteSessionNavigationUrl(`http://sigecad-academico.app.ufgd.edu.br/?ticket=${ticket}`) ===
@@ -114,6 +120,7 @@ await check("redirect HTTP do SIGECAD permanece no app em HTTPS", () => {
   assert(rewriteSessionNavigationUrl(`${SIGECAD_ORIGIN}/`) === null);
   assert(rewriteSessionNavigationUrl(`${CAS_ORIGIN}/?service=${encodeURIComponent(`${SIGECAD_ORIGIN}/`)}`) === null);
   assert(rewriteSessionNavigationUrl("http://evil.ufgd.edu.br/") === null);
+  assert(rewriteSessionNavigationUrl("http://user:pass@login.app.ufgd.edu.br/login") === null);
   assert(rewriteSessionNavigationUrl("http://user:pass@sigecad-academico.app.ufgd.edu.br/") === null);
   assert(!isAllowedSessionUrl("http://sigecad-academico.app.ufgd.edu.br/"));
 });
@@ -181,8 +188,12 @@ await check("WebView de sessão está endurecida", () => {
   assert(session.includes("incognito={false}"));
   assert(session.includes("sharedCookiesEnabled"));
   assert(!session.includes("sharedCookiesEnabled={false}"));
-  assert(session.includes("thirdPartyCookiesEnabled={false}"));
+  assert(session.includes("thirdPartyCookiesEnabled"));
+  assert(!session.includes("thirdPartyCookiesEnabled={false}"));
   assert(session.includes("cacheEnabled={false}"));
+  assert(session.includes('cacheMode="LOAD_NO_CACHE"'));
+  assert(session.includes("javaScriptEnabled"));
+  assert(session.includes("domStorageEnabled"));
   assert(session.includes("originWhitelist={[...WEBVIEW_ORIGIN_WHITELIST]}"));
   assert(session.includes("destroyBrowserSession"));
   assert(session.includes("beginLogin(true)"));
@@ -276,6 +287,17 @@ await check("plugin e app.json endurecem o Android de produção", () => {
     assert(network.includes('cleartextTrafficPermitted="false"'));
     assert(!debug.includes('usesCleartextTraffic="true"'));
   }
+});
+
+await check("plugin configura o ciclo de vida por cenas no iOS", () => {
+  const plugin = source("plugins/withIosSceneLifecycle.js");
+  const appJson = source("app.json");
+  assert(appJson.includes("withIosSceneLifecycle"));
+  assert(plugin.includes("UIApplicationSceneManifest"));
+  assert(plugin.includes("UIApplicationSupportsMultipleScenes: false"));
+  assert(plugin.includes("class SceneDelegate: UIResponder, UIWindowSceneDelegate"));
+  assert(plugin.includes("factory.startReactNative"));
+  assert(plugin.includes("ExpoAppDelegateSubscriberManager.applicationDidBecomeActive"));
 });
 
 await check("dashboard não grava snapshot acadêmico", () => {

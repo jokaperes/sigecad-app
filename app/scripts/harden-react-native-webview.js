@@ -53,12 +53,14 @@ replace(
   "android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java",
   /    private static String TAG = "RNCWebViewClient";/,
   `    private static String TAG = "RNCWebViewClient";
+    private static final String CAS_HOST = "login.app.ufgd.edu.br";
     private static final String SIGECAD_HOST = "sigecad-academico.app.ufgd.edu.br";
     private static final String[] SIGECAD_ALLOWED_HOSTS = {
-        "login.app.ufgd.edu.br",
+        CAS_HOST,
         SIGECAD_HOST,
         "cartao.app.ufgd.edu.br",
         "webdoc.app.ufgd.edu.br",
+        "challenges.cloudflare.com",
         "sso.acesso.gov.br"
     };
 
@@ -68,6 +70,10 @@ replace(
             if (allowedHost.equalsIgnoreCase(host)) return true;
         }
         return false;
+    }
+
+    private boolean isSigecadHttpUpgradeHost(String host) {
+        return host != null && (CAS_HOST.equalsIgnoreCase(host) || SIGECAD_HOST.equalsIgnoreCase(host));
     }
 
     private @Nullable Boolean applySigecadNavigationPolicy(WebView view, String value) {
@@ -81,9 +87,9 @@ replace(
         final String scheme = uri.getScheme();
         final String host = uri.getHost();
         final int port = uri.getPort();
-        if ("http".equalsIgnoreCase(scheme) && SIGECAD_HOST.equalsIgnoreCase(host) &&
+        if ("http".equalsIgnoreCase(scheme) && isSigecadHttpUpgradeHost(host) &&
             uri.getUserInfo() == null && (port == -1 || port == 80)) {
-            final Uri destination = uri.buildUpon().scheme("https").encodedAuthority(SIGECAD_HOST).build();
+            final Uri destination = uri.buildUpon().scheme("https").encodedAuthority(host).build();
             view.loadUrl(destination.toString());
             return true;
         }
@@ -93,6 +99,52 @@ replace(
         return null;
     }`,
   "SIGECAD_ALLOWED_HOSTS",
+);
+
+// Upgrade installations already hardened by an earlier revision of this
+// script. Fresh installs already contain these markers from the block above.
+replace(
+  "android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java",
+  /    private static final String SIGECAD_HOST = "sigecad-academico\.app\.ufgd\.edu\.br";/,
+  `    private static final String CAS_HOST = "login.app.ufgd.edu.br";
+    private static final String SIGECAD_HOST = "sigecad-academico.app.ufgd.edu.br";`,
+  "private static final String CAS_HOST",
+);
+
+replace(
+  "android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java",
+  /        "login\.app\.ufgd\.edu\.br",/,
+  "        CAS_HOST,",
+  "        CAS_HOST,",
+);
+
+replace(
+  "android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java",
+  /    private @Nullable Boolean applySigecadNavigationPolicy/,
+  `    private boolean isSigecadHttpUpgradeHost(String host) {
+        return host != null && (CAS_HOST.equalsIgnoreCase(host) || SIGECAD_HOST.equalsIgnoreCase(host));
+    }
+
+    private @Nullable Boolean applySigecadNavigationPolicy`,
+  "private boolean isSigecadHttpUpgradeHost",
+);
+
+replace(
+  "android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java",
+  /if \("http"\.equalsIgnoreCase\(scheme\) && SIGECAD_HOST\.equalsIgnoreCase\(host\) &&\n            uri\.getUserInfo\(\) == null && \(port == -1 \|\| port == 80\)\) \{\n            final Uri destination = uri\.buildUpon\(\)\.scheme\("https"\)\.encodedAuthority\(SIGECAD_HOST\)\.build\(\);/,
+  `if ("http".equalsIgnoreCase(scheme) && isSigecadHttpUpgradeHost(host) &&
+            uri.getUserInfo() == null && (port == -1 || port == 80)) {
+            final Uri destination = uri.buildUpon().scheme("https").encodedAuthority(host).build();`,
+  'if ("http".equalsIgnoreCase(scheme) && isSigecadHttpUpgradeHost(host)',
+);
+
+replace(
+  "android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java",
+  /        "webdoc\.app\.ufgd\.edu\.br",\n        "sso\.acesso\.gov\.br"/,
+  `        "webdoc.app.ufgd.edu.br",
+        "challenges.cloudflare.com",
+        "sso.acesso.gov.br"`,
+  '        "challenges.cloudflare.com",',
 );
 
 replace(

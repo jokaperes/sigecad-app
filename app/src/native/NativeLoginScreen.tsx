@@ -44,8 +44,10 @@ export function NativeLoginScreen({ onDone: _onDone }: { onDone: () => void }) {
           onError={() => setError("Não foi possível abrir o login da UFGD. Verifique sua conexão.")}
           incognito
           cacheEnabled={false}
+          javaScriptEnabled
+          domStorageEnabled
           sharedCookiesEnabled={false}
-          thirdPartyCookiesEnabled={false}
+          thirdPartyCookiesEnabled
           webviewDebuggingEnabled={false}
           originWhitelist={[...WEBVIEW_ORIGIN_WHITELIST]}
           mixedContentMode="never"

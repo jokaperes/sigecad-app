@@ -132,6 +132,7 @@ interface NavigationWait {
 
 interface OriginProbe {
   id: string;
+  promise: Promise<OriginState>;
   resolve(state: OriginState): void;
   reject(error: Error): void;
   timeout: ReturnType<typeof setTimeout>;
@@ -247,20 +248,33 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   }, []);
 
   const probeOrigin = useCallback(() => {
-    if (!webView.current || originProbe.current) {
+    if (!webView.current) {
       return Promise.reject(new PortalBridgeError("Navegador do portal indisponível.", "protocol"));
     }
+    if (originProbe.current) return originProbe.current.promise;
     const id = `origin-${++originProbeCounter.current}`;
-    return new Promise<OriginState>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        originProbe.current = null;
-        reject(new PortalBridgeError("O portal não confirmou a página atual.", "timeout"));
-      }, 2_000);
-      originProbe.current = { id, resolve, reject, timeout };
-      webView.current?.injectJavaScript(
-        `(function(){var current=new URL(window.location.href);window.ReactNativeWebView.postMessage(JSON.stringify({channel:${JSON.stringify(ORIGIN_PROBE_CHANNEL)},id:${JSON.stringify(id)},ready:document.readyState==="complete",path:current.pathname,ticket:current.searchParams.has("ticket")}));})(); true;`,
-      );
+    let resolveProbe!: (state: OriginState) => void;
+    let rejectProbe!: (error: Error) => void;
+    const promise = new Promise<OriginState>((resolve, reject) => {
+      resolveProbe = resolve;
+      rejectProbe = reject;
     });
+    const probe: OriginProbe = {
+      id,
+      promise,
+      resolve: resolveProbe,
+      reject: rejectProbe,
+      timeout: undefined as unknown as ReturnType<typeof setTimeout>,
+    };
+    probe.timeout = setTimeout(() => {
+      if (originProbe.current === probe) originProbe.current = null;
+      rejectProbe(new PortalBridgeError("O portal não confirmou a página atual.", "timeout"));
+    }, 2_000);
+    originProbe.current = probe;
+    webView.current.injectJavaScript(
+      `(function(){var current=new URL(window.location.href);window.ReactNativeWebView.postMessage(JSON.stringify({channel:${JSON.stringify(ORIGIN_PROBE_CHANNEL)},id:${JSON.stringify(id)},ready:document.readyState==="complete",path:current.pathname,ticket:current.searchParams.has("ticket")}));})(); true;`,
+    );
+    return promise;
   }, []);
 
   const ensureOrigin = useCallback(async (origin: string) => {
@@ -433,6 +447,7 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   }, [rejectAll]);
 
   const connect = useCallback(async () => {
+    if (connecting.current) return;
     const attempt = ++connectAttempt.current;
     connecting.current = true;
     setError(null);
@@ -471,8 +486,11 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
     }
   }
 
-  function markOriginReady(url: string) {
-    const origin = safeHttpsOrigin(url);
+  function markOriginReady(state: OriginState) {
+    if (!state.complete) return;
+    const origin = state.origin;
+    const academicTicket = origin === SIGECAD_ORIGIN && state.ticket;
+    const stableAcademic = origin === SIGECAD_ORIGIN && !state.ticket;
     installedBridge.current = null;
     currentOrigin.current = origin;
     const waiting = navigationWait.current;
@@ -480,15 +498,18 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       clearTimeout(waiting.timeout);
       navigationWait.current = null;
       waiting.resolve();
-    } else if (waiting && isLoginUrl(url)) {
+    } else if (waiting && origin === CAS_ORIGIN) {
       clearTimeout(waiting.timeout);
       navigationWait.current = null;
       waiting.reject(new PortalBridgeError("Sua sessão UFGD terminou.", "auth"));
       if (phase === "ready" || phase === "offline") setPhase("expired");
       else reopenLogin();
     }
-    coverAcademicNavigation(url);
-    if (hasCasServiceTicket(url)) {
+    if ((phase === "login" || phase === "connecting" || phase === "error") &&
+      (stableAcademic || academicTicket)) {
+      setPhase("connecting");
+    }
+    if (academicTicket) {
       abortInFlightBridge();
       if (ticketSettle.current) clearTimeout(ticketSettle.current);
       const scheduled = connectAttempt.current;
@@ -503,8 +524,21 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       clearTimeout(ticketSettle.current);
       ticketSettle.current = null;
     }
-    if (isStableAcademicUrl(url) && (phase === "login" || phase === "connecting" || phase === "error")) {
+    if (stableAcademic && (phase === "login" || phase === "connecting" || phase === "error")) {
       void connect();
+    }
+  }
+
+  async function settleCurrentPage(attempt = 0) {
+    try {
+      const detected = await probeOrigin();
+      if (!detected.complete) {
+        if (attempt < 30) setTimeout(() => { void settleCurrentPage(attempt + 1); }, 100);
+        return;
+      }
+      markOriginReady(detected);
+    } catch {
+      if (attempt < 3) setTimeout(() => { void settleCurrentPage(attempt + 1); }, 250);
     }
   }
 
@@ -517,20 +551,15 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   async function onLoadEnd(url: string, attempt = 0) {
     const eventOrigin = safeHttpsOrigin(url);
     if (eventOrigin === SIGECAD_ORIGIN || eventOrigin === CARD_ORIGIN) {
-      try {
-        const eventLocation = new URL(url);
-        const detected = await probeOrigin();
-        if (detected.origin !== eventOrigin || detected.path !== eventLocation.pathname ||
-          detected.ticket !== eventLocation.searchParams.has("ticket")) return;
-        if (!detected.complete) {
-          if (attempt < 30) setTimeout(() => { void onLoadEnd(url, attempt + 1); }, 100);
-          return;
-        }
-      } catch {
-        return;
-      }
+      await settleCurrentPage(attempt);
+      return;
     }
-    markOriginReady(url);
+    markOriginReady({
+      origin: eventOrigin,
+      path: null,
+      ticket: false,
+      complete: true,
+    });
   }
 
   function loadSessionUrlInsideApp(url: string) {
@@ -546,12 +575,6 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
   }
 
   function onMessage(event: WebViewMessageEvent) {
-    if (!isBridgeUrl(event.nativeEvent.url)) return;
-    const documentMessage = parseDocumentBridgeMessage(event.nativeEvent.data);
-    if (documentMessage) {
-      handleDocumentMessage(documentMessage);
-      return;
-    }
     try {
       const perf = JSON.parse(event.nativeEvent.data) as {
         channel?: unknown;
@@ -564,7 +587,7 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       };
       if (perf.channel === ORIGIN_PROBE_CHANNEL && typeof perf.id === "string") {
         const item = originProbe.current;
-        if (item?.id === perf.id) {
+        if (item?.id === perf.id && isAllowedSessionUrl(event.nativeEvent.url)) {
           clearTimeout(item.timeout);
           originProbe.current = null;
           const path = typeof perf.path === "string" && perf.path.length <= 300 &&
@@ -580,6 +603,7 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       }
       if (perf.channel === NAV_READY_CHANNEL && perf.ready === true) {
         coverAcademicNavigation(event.nativeEvent.url);
+        void settleCurrentPage();
         return;
       }
       const allowedStages = [
@@ -595,6 +619,12 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
         return;
       }
     } catch { /* Não é uma mensagem de performance; validar como resposta normal. */ }
+    if (!isBridgeUrl(event.nativeEvent.url)) return;
+    const documentMessage = parseDocumentBridgeMessage(event.nativeEvent.data);
+    if (documentMessage) {
+      handleDocumentMessage(documentMessage);
+      return;
+    }
     let response;
     try {
       response = parseBridgeResponse(event.nativeEvent.data);
@@ -753,25 +783,22 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
         {showLoginChrome ? (
           <SafeAreaView edges={["top", "left", "right"]} style={styles.loginSafe}>
             <View style={styles.loginShell}>
-            <View style={styles.loginBrand}>
-              <View style={styles.loginMark}>
-                <Image source={require("../../assets/brand/ufgd-symbol-negative-1024.png")} style={styles.loginMarkImage} />
+              <View style={styles.loginBrand}>
+                <View style={styles.loginMark}>
+                  <Image source={require("../../assets/brand/ufgd-symbol-negative-1024.png")} style={styles.loginMarkImage} />
+                </View>
+                <Text style={styles.loginBrandText}>SIGECAD</Text>
               </View>
-              <Text style={styles.loginBrandText}>SIGECAD</Text>
-            </View>
-            <View style={styles.copy}>
-              <Text style={styles.title}>Acesso com sua conta UFGDNET</Text>
-              <Text style={styles.subtitle}>
-                Entre no portal oficial dentro do app. A senha fica só neste aparelho.
-              </Text>
-              <View style={styles.originPill}><Text style={styles.originText}>login.app.ufgd.edu.br</Text></View>
-            </View>
-            {error ? (
-              <>
-                <Notice danger>{error}</Notice>
-                <SecondaryButton label="Reabrir login" onPress={reopenLogin} />
-              </>
-            ) : null}
+              <View style={styles.copy}>
+                <Text style={styles.title}>Acesso com sua conta UFGDNET</Text>
+                <View style={styles.originPill}><Text style={styles.originText}>login.app.ufgd.edu.br</Text></View>
+              </View>
+              {error ? (
+                <>
+                  <Notice danger>{error}</Notice>
+                  <SecondaryButton label="Reabrir login" onPress={reopenLogin} />
+                </>
+              ) : null}
             </View>
           </SafeAreaView>
         ) : null}
@@ -799,8 +826,10 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
           incognito={false}
           cacheEnabled={false}
           cacheMode="LOAD_NO_CACHE"
+          javaScriptEnabled
+          domStorageEnabled
           sharedCookiesEnabled
-          thirdPartyCookiesEnabled={false}
+          thirdPartyCookiesEnabled
           webviewDebuggingEnabled={false}
           originWhitelist={[...WEBVIEW_ORIGIN_WHITELIST]}
           mixedContentMode="never"
@@ -826,9 +855,6 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
           <View style={styles.connectingOverlay} pointerEvents="auto">
             <ActivityIndicator color={colors.primary} />
             <Text style={styles.connectingTitle}>Entrando no SIGECAD…</Text>
-            <Text style={styles.connectingCopy}>
-              A sessão fica só neste aparelho. O app não vê sua senha.
-            </Text>
           </View>
         ) : null}
         {liveDocumentSurface ? (
@@ -908,7 +934,6 @@ const styles = StyleSheet.create({
   loginBrandText: { color: "#17201C", fontFamily: fonts.monoSemibold, fontSize: 15, letterSpacing: 0.8, minWidth: 92, paddingRight: 12, flexShrink: 0 },
   copy: { gap: spacing.xs, marginTop: spacing.sm },
   title: { color: "#17201C", fontFamily: fonts.sansSemibold, fontSize: 24, lineHeight: 30 },
-  subtitle: { color: "#3D4A43", fontFamily: fonts.sans, fontSize: 13, lineHeight: 20 },
   originPill: { alignSelf: "flex-start", backgroundColor: "#EFF1ED", paddingHorizontal: 9, paddingVertical: 5, borderRadius: 4, marginTop: 4 },
   originText: { color: "#5C6B63", fontFamily: fonts.mono, fontSize: 10.5 },
   connecting: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
