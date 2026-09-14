@@ -123,7 +123,6 @@ function SentinelApp() {
         <Screen centered>
           <Brand />
           <Card accessibilityLabel="Inicialização do aplicativo">
-            <Eyebrow>Conexão segura</Eyebrow>
             <Text style={styles.title}>Preparando seus alertas</Text>
             <Text style={styles.body}>Validando o dispositivo e carregando apenas dados locais.</Text>
             {error ? (
@@ -157,11 +156,10 @@ function SentinelApp() {
             <Brand />
             <View style={styles.hero}>
               <Eyebrow>Último passo</Eyebrow>
-              <Text style={styles.heroTitle}>Receba o aviso. Guarde a privacidade.</Text>
+              <Text style={styles.heroTitle}>Ativar notificações</Text>
               <Text style={styles.body}>
-                Seu acesso UFGD fica somente no aparelho. O servidor recebe o token de push,
-                seu contato opcional, códigos de turma, hashes e rótulos dos eventos — nunca
-                sua senha nem o valor das notas.
+                O servidor recebe o token de push, o contato opcional e as turmas necessárias
+                para enviar os avisos.
               </Text>
             </View>
             <Card>
@@ -200,7 +198,6 @@ function SentinelApp() {
                 onPress={() => void enroll()}
               />
             </Card>
-            <Text style={styles.footnote}>Somente leitura • Credencial UFGD só no aparelho • Exclusão dentro do app</Text>
           </Screen>
         </KeyboardAvoidingView>
       </AppFrame>
@@ -235,7 +232,6 @@ function SentinelApp() {
           <Text style={styles.sectionTitle}>Seu dispositivo</Text>
           <InfoRow label="Último cadastro" value={lastUpdated} />
           <InfoRow label="Servidor" value="Push, turmas, hashes e rótulos" />
-          <InfoRow label="Credencial UFGD" value="Somente neste aparelho" />
           {error ? <Notice danger>{error}</Notice> : null}
           <SecondaryButton
             label="Sincronizar turmas agora"
@@ -246,7 +242,7 @@ function SentinelApp() {
         <Notice>O iOS pode atrasar verificações em segundo plano e deixa de executá-las se o app for encerrado à força.</Notice>
         {registration?.turmas.length ? (
           <Card>
-            <Text style={styles.sectionTitle}>Turmas protegidas</Text>
+            <Text style={styles.sectionTitle}>Turmas monitoradas</Text>
             <View style={styles.codeList}>
               {registration.turmas.map((code) => (
                 <View key={code} style={styles.codePill}><Text style={styles.codeText}>{code}</Text></View>
@@ -330,7 +326,6 @@ const styles = StyleSheet.create({
   },
   consentRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm },
   consentText: { flex: 1, color: colors.muted, fontSize: 14, lineHeight: 20 },
-  footnote: { color: colors.muted, fontSize: 12, textAlign: "center" },
   statusPill: {
     alignSelf: "flex-start",
     flexDirection: "row",

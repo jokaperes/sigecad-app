@@ -52,11 +52,10 @@ import type { LucideIcon } from "lucide-react-native";
 import type { AcademicCourse, AcademicOverview } from "../../core/academic";
 import type { Periodo } from "../../core/client";
 import {
-  DEFAULT_DESIGN_PREFERENCES,
   clearPreviewState,
-  getDesignPreferences,
-  saveDesignPreferences,
-  type DesignPreferences,
+  getThemePreference,
+  saveThemePreference,
+  type ThemePreference,
 } from "../../storage/asyncStorage";
 import { PortalSession, usePortalSession } from "../PortalSession";
 import { activeScheduleEntries, isFinishedCourse } from "../academicStatus";
@@ -82,7 +81,6 @@ import {
   officialAveragesByType,
   portalDataFromStartup,
   resolveCourseProgress,
-  type AbsenceEntry,
   type AcademicProfile,
   type CourseTypeFilter,
   type CurriculumCourse,
@@ -141,7 +139,7 @@ function DesignDashboard() {
   const [overview, setOverview] = useState<AcademicOverview | null>(null);
   const [studentCard, setStudentCard] = useState<StudentCard | null>(null);
   const [portal, setPortal] = useState<PortalData>(emptyPortalData());
-  const [preferences, setPreferences] = useState<DesignPreferences>(DEFAULT_DESIGN_PREFERENCES);
+  const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const [initialComplete, setInitialComplete] = useState(false);
   const [cardLoading, setCardLoading] = useState(true);
   const [secondaryPhase, setSecondaryPhase] = useState<SecondaryPhase>("loading");
@@ -163,13 +161,13 @@ function DesignDashboard() {
   const pendingPlanPeriods = useRef<Periodo[]>([]);
   const loadMorePlansBusy = useRef(false);
 
-  const dark = preferences.theme === "dark" ||
-    (preferences.theme === "system" && systemScheme === "dark");
+  const dark = themePreference === "dark" ||
+    (themePreference === "system" && systemScheme === "dark");
   const theme = dark ? darkTheme : lightTheme;
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   useEffect(() => {
-    void getDesignPreferences().then(setPreferences);
+    void getThemePreference().then(setThemePreference);
   }, []);
   useEffect(() => { studentCardRef.current = studentCard; }, [studentCard]);
 
@@ -261,12 +259,9 @@ function DesignDashboard() {
     }
   }, [overview, requestBatch]);
 
-  const updatePreferences = useCallback((patch: Partial<DesignPreferences>) => {
-    setPreferences((current) => {
-      const next = { ...current, ...patch };
-      void saveDesignPreferences(next);
-      return next;
-    });
+  const updateThemePreference = useCallback((value: ThemePreference) => {
+    setThemePreference(value);
+    void saveThemePreference(value);
   }, []);
 
   const refresh = useCallback(async (manual = false) => {
@@ -434,7 +429,7 @@ function DesignDashboard() {
 
   const main = MAIN_ROUTES.includes(route as MainRoute);
   const profile = portal.profile;
-  const homeHasGreenHeader = !dark && route === "home" && preferences.home !== "agenda";
+  const homeHasGreenHeader = !dark && route === "home";
   const topInsetColor = homeHasGreenHeader ? "#174F3D" : theme.background;
 
   return (
@@ -479,13 +474,7 @@ function DesignDashboard() {
           <OfflineBanner theme={theme} styles={styles} onRetry={() => void refresh(true)} />
         ) : null}
         {route === "home" && overview ? (
-          preferences.home === "dense" ? (
-            <HomeDense overview={overview} card={studentCard} profile={profile} portal={portal} theme={theme} styles={styles} />
-          ) : preferences.home === "agenda" ? (
-            <HomeAgenda overview={overview} card={studentCard} profile={profile} portal={portal} theme={theme} styles={styles} />
-          ) : (
-            <HomeCards overview={overview} card={studentCard} cardLoading={cardLoading} profile={profile} portal={portal} theme={theme} styles={styles} navigate={navigate} />
-          )
+          <HomeCards overview={overview} card={studentCard} cardLoading={cardLoading} profile={profile} portal={portal} theme={theme} styles={styles} navigate={navigate} />
         ) : null}
         {route === "grades" && overview ? (
           <GradesScreen overview={overview} loading={secondaryPhase === "loading"} theme={theme} styles={styles} openCourse={openCourse} openAbsences={() => navigate("absences")} />
@@ -494,7 +483,7 @@ function DesignDashboard() {
           <GradeDetailScreen course={selectedCourse} theme={theme} styles={styles} back={() => navigate("grades")} />
         ) : null}
         {route === "absences" && overview ? (
-          <AbsencesScreen overview={overview} portal={portal} loading={secondaryPhase === "loading"} variant={preferences.absences} onVariantChange={(absences) => updatePreferences({ absences })} theme={theme} styles={styles} back={() => navigate("grades")} />
+          <AbsencesScreen overview={overview} theme={theme} styles={styles} back={() => navigate("grades")} />
         ) : null}
         {route === "schedule" && overview ? (
           <ScheduleScreen period={overview.period.nome} entries={portal.schedule} courses={overview.courses} theme={theme} styles={styles} />
@@ -507,12 +496,12 @@ function DesignDashboard() {
             card={studentCard}
             profile={profile}
             portal={portal}
-            preferences={preferences}
+            themePreference={themePreference}
             theme={theme}
             styles={styles}
             message={localMessage}
             secondaryPhase={secondaryPhase}
-            updatePreferences={updatePreferences}
+            updateThemePreference={updateThemePreference}
             navigate={navigate}
             clearHistory={() => void clearLocalHistory()}
             logout={resetSession}
@@ -581,67 +570,6 @@ function HomeCards({ overview, card, cardLoading, profile, portal, theme, styles
   );
 }
 
-function HomeDense({ overview, card, profile, portal, theme, styles }: ScreenProps & {
-  overview: AcademicOverview; card: StudentCard | null; profile: AcademicProfile | null; portal: PortalData;
-}) {
-  const next = nextSchedule(activeScheduleEntries(portal.schedule, overview.courses), null);
-  const nextRoom = formatScheduleRoom(next?.room);
-  const activeCount = overview.courses.filter((course) => !isFinishedCourse(course)).length;
-  const progress = resolveCourseProgress(profile?.progress, portal.workload);
-  return (
-    <View>
-      <View style={styles.denseHero}>
-        <View style={styles.rowBetween}><Text style={styles.periodOnGreen}>{overview.period.nome}</Text><Text style={styles.monoOnGreen}>{profile?.rga ? `RGA ${profile.rga}` : "SIGECAD"}</Text></View>
-        <View style={styles.denseMetrics}>
-          <HeroMetric label="ATIVAS" value={`${activeCount}`} styles={styles} />
-          <HeroMetric label="RU" value={cleanMoney(card?.ruBalance)} styles={styles} />
-          <HeroMetric label="CANTINA" value={cleanMoney(card?.canteenBalance)} styles={styles} />
-          <HeroMetric label="CURSO" value={progress !== null ? `${Math.round(progress)}%` : "—"} styles={styles} />
-        </View>
-      </View>
-      <View style={styles.page}>
-        <View style={styles.rowBetween}><Eyebrow styles={styles}>DISCIPLINAS</Eyebrow><Text style={styles.monoCaption}>nota · faltas</Text></View>
-        <Surface styles={styles} style={styles.listSurface}>
-          {overview.courses.map((course, index) => (
-            <View key={courseKey(course)} style={[styles.denseCourse, index > 0 && styles.topBorder]}>
-              <View style={styles.flex}><Text style={styles.itemTitle}>{formatAcademicName(course.name)}</Text><Text style={styles.monoCaption}>{course.code} · {course.section}</Text></View>
-              <View style={styles.inlineValues}><Text style={styles.monoValue}>{formatGrade(courseDisplayValue(course))}</Text><Text style={[styles.monoCaption, !isFinishedCourse(course) && absenceRatio(course) >= .75 && styles.dangerText]}>{isFinishedCourse(course) ? course.result : absenceText(course)}</Text></View>
-            </View>
-          ))}
-        </Surface>
-        <Surface styles={styles}><View style={styles.rowBetween}><View style={styles.flex}><Text style={styles.itemTitle}>Próxima aula</Text><Text style={styles.caption}>{next ? `${formatAcademicName(next.course) ?? next.course}${nextRoom ? ` · ${nextRoom}` : ""}` : "Nenhuma aula encontrada"}</Text></View><Text style={styles.monoValue}>{formatScheduleSlot(next?.slot) ?? "—"}</Text></View></Surface>
-      </View>
-    </View>
-  );
-}
-
-function HomeAgenda({ overview, card, profile, portal, theme, styles }: ScreenProps & {
-  overview: AcademicOverview; card: StudentCard | null; profile: AcademicProfile | null; portal: PortalData;
-}) {
-  const today = new Date();
-  const activeCourses = overview.courses.filter((course) => !isFinishedCourse(course));
-  const entries = activeScheduleEntries(portal.schedule, overview.courses).filter((item) => item.day === today.getDay());
-  return (
-    <View>
-      <View style={styles.agendaHeader}>
-        <View><Text style={styles.eyebrow}>{dateHeading(today)}</Text><Text style={styles.pageTitle}>Hoje</Text></View>
-        <Text style={styles.periodPill}>{overview.period.nome}</Text>
-      </View>
-      <View style={styles.page}>
-        <Surface styles={styles} style={styles.timelineSurface}>
-          {entries.length ? entries.map((entry, index) => <TimelineEntry key={`${entry.day}-${entry.slot}-${index}`} entry={entry} active={isCurrentEntry(entry)} last={index === entries.length - 1} theme={theme} styles={styles} />) : <EmptyInline styles={styles}>Nenhuma aula encontrada para hoje.</EmptyInline>}
-        </Surface>
-        <View style={styles.fourMetrics}>
-          <TinyMetric label="RU" value={cleanMoney(card?.ruBalance)} styles={styles} />
-          <TinyMetric label="CANTINA" value={cleanMoney(card?.canteenBalance)} styles={styles} />
-          <TinyMetric label="ATIVAS" value={`${activeCourses.length}`} styles={styles} />
-          <TinyMetric label="FALTAS" value={`${activeCourses.filter((course) => absenceRatio(course) >= .75).length} alerta`} danger styles={styles} />
-        </View>
-      </View>
-    </View>
-  );
-}
-
 function GradesScreen({ overview, loading, theme, styles, openCourse, openAbsences }: ScreenProps & {
   overview: AcademicOverview; loading: boolean; openCourse(course: AcademicCourse): void; openAbsences(): void;
 }) {
@@ -690,36 +618,17 @@ function GradeDetailScreen({ course, theme, styles, back }: ScreenProps & { cour
   );
 }
 
-function AbsencesScreen({ overview, portal, loading, variant, onVariantChange, theme, styles, back }: ScreenProps & {
-  overview: AcademicOverview; portal: PortalData; loading: boolean; variant: DesignPreferences["absences"]; onVariantChange(value: DesignPreferences["absences"]): void; back(): void;
+function AbsencesScreen({ overview, theme, styles, back }: ScreenProps & {
+  overview: AcademicOverview; back(): void;
 }) {
   const sorted = overview.courses.filter((course) => !isFinishedCourse(course)).sort((a, b) => absenceRatio(b) - absenceRatio(a));
-  const risk = sorted.filter((course) => absenceRatio(course) >= .5);
-  const safe = sorted.filter((course) => absenceRatio(course) < .5);
   return (
     <View style={styles.page}>
       <BackHeader label="Notas" onPress={back} theme={theme} styles={styles} />
       <TitleBlock title="Faltas" subtitle={`Limite individual por disciplina · ${overview.period.nome}`} styles={styles} />
-      <PreferenceGroup label="Exibição" values={[{key:"bars",label:"Barras"},{key:"alerts",label:"Alertas"}]} selected={variant} onChange={(value) => onVariantChange(value as DesignPreferences["absences"])} styles={styles} />
-      {loading && variant === "alerts" ? <LoadingNotice label="Carregando datas das faltas" theme={theme} styles={styles} /> : null}
-      {variant === "bars" ? (
-        <Surface styles={styles}>
-          {sorted.length ? sorted.map((course) => <RiskBar key={courseKey(course)} course={course} theme={theme} styles={styles} detailed />) : <EmptyInline styles={styles}>Nenhuma disciplina ativa para acompanhar faltas.</EmptyInline>}
-        </Surface>
-      ) : (
-        <>
-          <Eyebrow styles={styles}>RISCO DE REPROVAÇÃO POR FALTA</Eyebrow>
-          {risk.length ? risk.map((course) => (
-            <Surface key={courseKey(course)} styles={styles} style={absenceRatio(course) >= .75 ? styles.riskSurface : undefined}>
-              <View style={styles.rowBetween}><Text style={styles.cardTitle}>{formatAcademicName(course.name)}</Text><Text style={[styles.monoValue, absenceRatio(course) >= .75 && styles.dangerText]}>{absenceText(course)}</Text></View>
-              <Text style={styles.body}>{absenceRemaining(course)}</Text>
-              <MiniAbsenceHistory entries={portal.absences[courseKey(course)] ?? []} styles={styles} />
-            </Surface>
-          )) : <EmptyState label="Nenhuma disciplina em risco." styles={styles} />}
-          <Eyebrow styles={styles}>SEM RISCO</Eyebrow>
-          <Surface styles={styles} style={styles.listSurface}>{safe.length ? safe.map((course, index) => <View key={courseKey(course)} style={[styles.simpleRow, index > 0 && styles.topBorder]}><Text style={styles.itemTitle}>{formatAcademicName(course.name)}</Text><Text style={styles.monoValue}>{absenceText(course)}</Text></View>) : <EmptyInline styles={styles}>Nenhuma outra disciplina ativa.</EmptyInline>}</Surface>
-        </>
-      )}
+      <Surface styles={styles}>
+        {sorted.length ? sorted.map((course) => <RiskBar key={courseKey(course)} course={course} theme={theme} styles={styles} detailed />) : <EmptyInline styles={styles}>Nenhuma disciplina ativa para acompanhar faltas.</EmptyInline>}
+      </Surface>
     </View>
   );
 }
@@ -857,10 +766,10 @@ function CardScreen({ card, error, request, onCardUpdate, theme, styles }: Scree
   );
 }
 
-function ProfileScreen({ card, profile, portal, preferences, theme, styles, message, secondaryPhase, updatePreferences, navigate, clearHistory, logout }: ScreenProps & {
-  card: StudentCard | null; profile: AcademicProfile | null; portal: PortalData; preferences: DesignPreferences; message: string | null;
+function ProfileScreen({ card, profile, portal, themePreference, theme, styles, message, secondaryPhase, updateThemePreference, navigate, clearHistory, logout }: ScreenProps & {
+  card: StudentCard | null; profile: AcademicProfile | null; portal: PortalData; themePreference: ThemePreference; message: string | null;
   secondaryPhase: SecondaryPhase;
-  updatePreferences(value: Partial<DesignPreferences>): void; navigate(route: Route): void; clearHistory(): void; logout(): void;
+  updateThemePreference(value: ThemePreference): void; navigate(route: Route): void; clearHistory(): void; logout(): void;
 }) {
   const [rgaCopyStatus, setRgaCopyStatus] = useState<"idle" | "copied" | "error">("idle");
   const progress = resolveCourseProgress(profile?.progress, portal.workload);
@@ -903,10 +812,8 @@ function ProfileScreen({ card, profile, portal, preferences, theme, styles, mess
       </Surface>
       <Surface styles={styles}><Eyebrow styles={styles}>PROGRESSO DO CURSO</Eyebrow><Text style={styles.monoMetric}>{progress !== null ? `${Math.round(progress)}%` : "—"}</Text><Progress value={(progress ?? 0) / 100} color={theme.primary} styles={styles} /><Text style={styles.caption}>{workloadLine(portal)}</Text></Surface>
       {secondaryPhase === "loading" ? <LoadingNotice label="Carregando notas, histórico e grade" theme={theme} styles={styles} /> : null}
-      <Eyebrow styles={styles}>PERSONALIZAÇÃO</Eyebrow>
-      <PreferenceGroup label="Início" values={[{key:"cards",label:"Cards"},{key:"dense",label:"Lista"},{key:"agenda",label:"Agenda"}]} selected={preferences.home} onChange={(home) => updatePreferences({ home: home as DesignPreferences["home"] })} styles={styles} />
-      <PreferenceGroup label="Faltas" values={[{key:"bars",label:"Barras"},{key:"alerts",label:"Alertas"}]} selected={preferences.absences} onChange={(absences) => updatePreferences({ absences: absences as DesignPreferences["absences"] })} styles={styles} />
-      <PreferenceGroup label="Tema" values={[{key:"system",label:"Sistema"},{key:"light",label:"Claro"},{key:"dark",label:"Escuro"}]} selected={preferences.theme} onChange={(value) => updatePreferences({ theme: value as DesignPreferences["theme"] })} styles={styles} />
+      <Eyebrow styles={styles}>APARÊNCIA</Eyebrow>
+      <ThemeSelector value={themePreference} onChange={updateThemePreference} styles={styles} />
       <Eyebrow styles={styles}>TELAS ACADÊMICAS</Eyebrow>
       <Surface styles={styles} style={styles.listSurface}>
         <MenuRow label="Documentos acadêmicos" icon={FileText} onPress={() => navigate("documents")} theme={theme} styles={styles} />
@@ -914,7 +821,7 @@ function ProfileScreen({ card, profile, portal, preferences, theme, styles, mess
         <MenuRow label="Estrutura curricular" icon={Layers3} onPress={() => navigate("curriculum")} theme={theme} styles={styles} border />
         <MenuRow label="Matrícula" icon={ListChecks} onPress={() => navigate("enrollment")} theme={theme} styles={styles} border />
         <MenuRow label="Notas e matrícula" icon={Bell} onPress={() => navigate("notifications")} theme={theme} styles={styles} border />
-        <MenuRow label="Diagnóstico seguro" icon={ListChecks} onPress={() => navigate("diagnostics")} theme={theme} styles={styles} border />
+        <MenuRow label="Diagnóstico" icon={ListChecks} onPress={() => navigate("diagnostics")} theme={theme} styles={styles} border />
       </Surface>
       {portal.unavailable.length ? <InlineNotice text={`Não foi possível carregar: ${portal.unavailable.join(", ")}.`} styles={styles} /> : null}
       {message ? <InlineNotice text={message} styles={styles} /> : null}
@@ -963,14 +870,14 @@ function DocumentsScreen({ catalog, sections, loading, error, sharingKey, hasMor
   const header = (
     <View style={styles.documentHeader}>
       <BackHeader label="Perfil" onPress={back} theme={theme} styles={styles} />
-      <TitleBlock title="Documentos" subtitle="PDFs oficiais do portal, sem cópias permanentes no aparelho" styles={styles} />
+      <TitleBlock title="Documentos" styles={styles} />
       {loading ? <LoadingNotice label={totalPlans ? "Carregando semestres anteriores" : "Consultando documentos disponíveis"} theme={theme} styles={styles} /> : null}
       {error ? <InlineNotice text={error} styles={styles} /> : null}
       <Eyebrow styles={styles}>DOCUMENTOS PESSOAIS</Eyebrow>
       <Surface styles={styles} style={styles.listSurface}>
         <DocumentActionRow
           label="Atestado de matrícula"
-          detail="Comprovante oficial em PDF"
+          detail="Comprovante em PDF"
           available={catalog?.enrollmentCertificate.available === true}
           unavailableDetail="A UFGD libera apenas no período letivo atual para estudante regularmente matriculado"
           busy={sharingKey === "enrollment-certificate"}
@@ -985,7 +892,7 @@ function DocumentsScreen({ catalog, sections, loading, error, sharingKey, hasMor
         />
         <DocumentActionRow
           label="Histórico escolar"
-          detail="Histórico oficial em PDF"
+          detail="Histórico em PDF"
           available={catalog?.schoolTranscript.available === true}
           busy={sharingKey === "school-transcript"}
           disabled={Boolean(sharingKey)}
@@ -1121,7 +1028,7 @@ function DiagnosticsScreen({ overview, card, portal, cardUnavailable, detailsLoa
   return (
     <View style={styles.page}>
       <BackHeader label="Perfil" onPress={back} theme={theme} styles={styles} />
-      <TitleBlock title="Diagnóstico seguro" subtitle="Contagens e estados, sem valores pessoais" styles={styles} />
+      <TitleBlock title="Diagnóstico" styles={styles} />
       <Surface styles={styles} style={styles.listSurface}>
         {rows.map((item, index) => {
           const color = item.state === "ok" ? theme.success : item.state === "warning" ? theme.warning : theme.danger;
@@ -1136,8 +1043,6 @@ function DiagnosticsScreen({ overview, card, portal, cardUnavailable, detailsLoa
           );
         })}
       </Surface>
-      <InlineNotice text="Esta tela nunca mostra cookie, senha, nome, RGA, nota, saldo, URL ou corpo bruto de resposta." styles={styles} />
-      <Text style={styles.footnote}>O diagnóstico existe somente em memória e é recalculado a cada carga.</Text>
     </View>
   );
 }
@@ -1170,10 +1075,8 @@ function HistoryScreen({ portal, loading, theme, styles, back }: ScreenProps & {
 
 function CurriculumScreen({ portal, loading, theme, styles, back }: ScreenProps & { portal: PortalData; loading: boolean; back(): void }) {
   const [typeFilter, setTypeFilter] = useState<CourseTypeFilter>("all");
-  const semesters = useMemo(
-    () => chunk(portal.curriculum, 6)
-      .map((courses, index) => ({ index, courses: courses.filter((course) => matchesCourseType(course.type, typeFilter)) }))
-      .filter((section) => section.courses.length),
+  const courses = useMemo(
+    () => portal.curriculum.filter((course) => matchesCourseType(course.type, typeFilter)),
     [portal.curriculum, typeFilter],
   );
   return (
@@ -1182,7 +1085,7 @@ function CurriculumScreen({ portal, loading, theme, styles, back }: ScreenProps 
       <TitleBlock title="Grade do curso" subtitle={`${formatCourseName(portal.profile?.course) ?? "Estrutura curricular"}${portal.profile?.structure ? ` · ${portal.profile.structure}` : ""}`} styles={styles} />
       <TypeFilter value={typeFilter} onChange={setTypeFilter} styles={styles} />
       <View style={styles.legend}><Legend color={theme.success} label="Cursada" styles={styles} /><Legend color={theme.primary} label="Cursando" styles={styles} /><Legend color={theme.border} label="Pendente" styles={styles} /></View>
-      {semesters.length ? semesters.map((section) => <CurriculumSemester key={section.index} index={section.index} courses={section.courses} theme={theme} styles={styles} />) : loading ? <LoadingNotice label="Carregando estrutura curricular" theme={theme} styles={styles} /> : <EmptyState label={portal.curriculum.length ? "Nenhuma disciplina neste filtro." : "Estrutura curricular indisponível nesta sessão."} styles={styles} />}
+      {courses.length ? <CurriculumCourses courses={courses} theme={theme} styles={styles} /> : loading ? <LoadingNotice label="Carregando estrutura curricular" theme={theme} styles={styles} /> : <EmptyState label={portal.curriculum.length ? "Nenhuma disciplina neste filtro." : "Estrutura curricular indisponível nesta sessão."} styles={styles} />}
       {portal.workload ? <Surface styles={styles}><Eyebrow styles={styles}>CARGA HORÁRIA</Eyebrow><WorkloadLine label="Obrigatória" done={portal.workload.requiredDone} total={portal.workload.requiredTotal} styles={styles} /><WorkloadLine label="Optativa" done={portal.workload.optionalDone} total={portal.workload.optionalTotal} styles={styles} /><WorkloadLine label="Extensão" done={portal.workload.extensionDone} total={portal.workload.extensionTotal} styles={styles} /></Surface> : null}
     </View>
   );
@@ -1264,7 +1167,7 @@ function LoadingScreen({ styles }: ScreenProps) {
 function PortalUnavailableScreen({ theme, styles, onRetry, onLogin }: ScreenProps & { onRetry(): void; onLogin(): void }) {
   return (
     <View>
-      <Hero theme={theme} styles={styles} period="—" title="SIGECAD" subtitle="Dados locais protegidos" />
+      <Hero theme={theme} styles={styles} period="—" title="SIGECAD" />
       <View style={styles.page}>
         <View style={styles.warningBanner}><WifiOff size={19} color={theme.warning} /><View style={styles.flex}><Text style={styles.itemTitle}>Portal da UFGD indisponível</Text><Text style={styles.caption}>Não foi possível carregar seus dados agora.</Text></View></View>
         <PrimaryAction label="Tentar agora" onPress={onRetry} styles={styles} />
@@ -1287,12 +1190,12 @@ function BottomTabs({ value, onChange, theme, styles, bottomInset }: ScreenProps
   return <View style={[styles.tabBar, { minHeight: 68 + bottomInset, paddingBottom: 9 + bottomInset }]}>{tabs.map((tab) => { const active = value === tab.key; const Icon = tab.icon; return <Pressable key={tab.key} onPress={() => onChange(tab.key)} style={styles.tab}><Icon size={22} color={active ? theme.primary : theme.faint} strokeWidth={1.8} /><Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab.label}</Text></Pressable>; })}</View>;
 }
 
-function Hero({ period, title, subtitle, styles }: ScreenProps & { period: string; title: string; subtitle: string }) {
-  return <View style={styles.hero}><View style={styles.rowBetween}><View style={styles.brandLockup}><Image source={require("../../../assets/brand/ufgd-symbol-negative-1024.png")} style={styles.brandSymbol} /><Text style={styles.logoSmall}>SIGECAD</Text></View><Text style={styles.heroPeriod}>{period}</Text></View><Text style={styles.heroTitle}>{title}</Text><Text style={styles.heroSubtitle}>{subtitle}</Text></View>;
+function Hero({ period, title, subtitle, styles }: ScreenProps & { period: string; title: string; subtitle?: string }) {
+  return <View style={styles.hero}><View style={styles.rowBetween}><View style={styles.brandLockup}><Image source={require("../../../assets/brand/ufgd-symbol-negative-1024.png")} style={styles.brandSymbol} /><Text style={styles.logoSmall}>SIGECAD</Text></View><Text style={styles.heroPeriod}>{period}</Text></View><Text style={styles.heroTitle}>{title}</Text>{subtitle ? <Text style={styles.heroSubtitle}>{subtitle}</Text> : null}</View>;
 }
 
-function TitleBlock({ title, subtitle, styles }: { title: string; subtitle: string; styles: ReturnType<typeof createStyles> }) {
-  return <View style={styles.titleBlock}><Text style={styles.pageTitle}>{title}</Text><Text style={styles.caption}>{subtitle}</Text></View>;
+function TitleBlock({ title, subtitle, styles }: { title: string; subtitle?: string; styles: ReturnType<typeof createStyles> }) {
+  return <View style={styles.titleBlock}><Text style={styles.pageTitle}>{title}</Text>{subtitle ? <Text style={styles.caption}>{subtitle}</Text> : null}</View>;
 }
 
 const TYPE_FILTERS: Array<{ id: CourseTypeFilter; label: string }> = [
@@ -1339,7 +1242,6 @@ function Metric({ label, value, detail, styles, muted }: { label: string; value:
   return <Surface styles={styles} style={styles.metricCard}><Eyebrow styles={styles}>{label}</Eyebrow><Text style={[styles.monoMetric, muted && styles.faintText]}>{value}</Text>{detail ? <Text style={styles.caption}>{detail}</Text> : null}</Surface>;
 }
 
-function HeroMetric({ label, value, styles }: { label: string; value: string; styles: ReturnType<typeof createStyles> }) { return <View><Text style={styles.heroMetricLabel}>{label}</Text><Text style={styles.heroMetricValue}>{value}</Text></View>; }
 function TinyMetric({ label, value, danger, styles }: { label: string; value: string; danger?: boolean; styles: ReturnType<typeof createStyles> }) { return <View style={styles.tinyMetric}><Text style={styles.eyebrow}>{label}</Text><Text style={[styles.monoValue, danger && styles.dangerText]}>{value}</Text></View>; }
 function BalanceLine({ label, value, styles }: { label: string; value: string; styles: ReturnType<typeof createStyles> }) { return <View style={styles.rowBetween}><Eyebrow styles={styles}>{label}</Eyebrow><Text style={styles.monoValue}>{value}</Text></View>; }
 
@@ -1352,8 +1254,6 @@ function RiskBar({ course, theme, styles, detailed }: ScreenProps & { course: Ac
 function Progress({ value, color, styles }: { value: number; color: string; styles: ReturnType<typeof createStyles> }) { return <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${Math.max(0, Math.min(1, value)) * 100}%`, backgroundColor: color }]} /></View>; }
 
 function LinkRow({ label, icon: Icon, onPress, theme, styles }: ScreenProps & { label: string; icon: LucideIcon; onPress(): void }) { return <Pressable onPress={onPress} style={({pressed}) => [styles.linkRow, pressed && styles.pressed]}><Icon size={17} color={theme.primary} /><Text style={styles.linkText}>{label}</Text><ChevronRight size={16} color={theme.faint} /></Pressable>; }
-
-function TimelineEntry({ entry, active, last, theme, styles }: ScreenProps & { entry: ScheduleEntry; active: boolean; last: boolean }) { return <View style={styles.timelineRow}><View style={styles.timelineRail}><Text style={[styles.monoTime, active && styles.primaryText]}>{entry.slot.split(/[–-]/)[0]?.trim()}</Text><View style={[styles.timelineDot, active && {backgroundColor: theme.primary}]} />{!last ? <View style={styles.timelineStem} /> : null}</View><View style={[styles.timelineCard, active && styles.timelineActive]}><Text style={[styles.itemTitle, active && styles.timelineActiveText]}>{formatAcademicName(entry.course)}</Text><Text style={[styles.caption, active && styles.timelineActiveCaption]}>{locationLine(entry)} · {entry.slot}</Text></View></View>; }
 
 function StudentPhoto({ card, large, styles, onRenderError }: { card: StudentCard | null; large?: boolean; styles: ReturnType<typeof createStyles>; onRenderError?: () => void }) {
   const [renderFailed, setRenderFailed] = useState(false);
@@ -1516,7 +1416,14 @@ function Transaction({ item, index, styles }: { item: CardTransaction; index: nu
 
 function InfoRow({ label, value, border, styles }: { label: string; value: string; border?: boolean; styles: ReturnType<typeof createStyles> }) { return <View style={[styles.infoRow, border && styles.topBorder]}><Text style={styles.caption}>{label}</Text><Text style={styles.infoValue}>{value}</Text></View>; }
 
-function PreferenceGroup({ label, values, selected, onChange, styles }: { label: string; values: Array<{key:string;label:string}>; selected: string; onChange(value:string):void; styles: ReturnType<typeof createStyles> }) { return <View><Text style={styles.preferenceLabel}>{label}</Text><View style={styles.segmented}>{values.map((item) => <Pressable key={item.key} onPress={() => onChange(item.key)} style={[styles.segment, selected === item.key && styles.segmentActive]}><Text style={[styles.segmentText, selected === item.key && styles.segmentTextActive]}>{item.label}</Text></Pressable>)}</View></View>; }
+function ThemeSelector({ value, onChange, styles }: { value: ThemePreference; onChange(value: ThemePreference): void; styles: ReturnType<typeof createStyles> }) {
+  const options: Array<{ key: ThemePreference; label: string }> = [
+    { key: "system", label: "Sistema" },
+    { key: "light", label: "Claro" },
+    { key: "dark", label: "Escuro" },
+  ];
+  return <View style={styles.segmented}>{options.map((item) => <Pressable key={item.key} onPress={() => onChange(item.key)} style={[styles.segment, value === item.key && styles.segmentActive]}><Text style={[styles.segmentText, value === item.key && styles.segmentTextActive]}>{item.label}</Text></Pressable>)}</View>;
+}
 
 function MenuRow({ label, icon: Icon, onPress, theme, styles, border }: ScreenProps & { label: string; icon: LucideIcon; onPress():void; border?:boolean }) { return <Pressable onPress={onPress} style={({pressed}) => [styles.menuRow, border && styles.topBorder, pressed && styles.pressed]}><Icon size={19} color={theme.primary} /><Text style={[styles.itemTitle, styles.flex]}>{label}</Text><ChevronRight size={17} color={theme.faint} /></Pressable>; }
 
@@ -1525,12 +1432,10 @@ function PrimaryAction({ label, onPress, styles }: { label:string; onPress():voi
 
 function InlineNotice({ text, danger, styles }: { text:string; danger?:boolean; styles: ReturnType<typeof createStyles> }) { return <View style={[styles.inlineNotice, danger && styles.inlineDanger]}><Text style={[styles.noticeCopy, danger && styles.dangerText]}>{text}</Text></View>; }
 function LoadingNotice({ label, compact = false, theme, styles }: ScreenProps & { label:string;compact?:boolean }) { return <View style={[styles.loadingNotice, compact && styles.loadingNoticeCompact]}><ActivityIndicator size="small" color={theme.primary} /><Text style={styles.noticeCopy}>{label}</Text></View>; }
-function MiniAbsenceHistory({ entries, styles }: { entries: AbsenceEntry[]; styles: ReturnType<typeof createStyles> }) { if (!entries.length) return null; const visible=entries.slice(-3).reverse(); return <View style={styles.absenceDates}>{visible.map((entry,index) => <Text key={`${entry.date}-${entry.time}-${index}`} style={styles.monoCaption}>{entry.date}{entry.time ? ` · ${entry.time}` : ""}</Text>)}{entries.length>visible.length?<Text style={styles.faintCaption}>+{entries.length-visible.length} registros</Text>:null}</View>; }
-
 function HistoryRow({ course, index, styles }: { course: HistoryCourse; index:number; styles: ReturnType<typeof createStyles> }) { const failed = /reprov/i.test(course.result ?? ""); const details=[course.code,course.hours?`${course.hours}h`:null,course.absences!==null?`${course.absences} faltas`:null].filter(Boolean).join(" · "); return <View style={[styles.historyRow, index > 0 && styles.topBorder]}><View style={styles.flex}><Text style={styles.itemTitle}>{formatAcademicName(course.name)}</Text><Text style={styles.monoCaption}>{details}</Text></View><View style={styles.historyResult}><Text style={styles.monoValue}>{formatGrade(course.grade)}</Text><Text style={[styles.caption, failed && styles.dangerText]}>{course.result ?? "—"}</Text></View></View>; }
 
 function Legend({ color, label, styles }: { color:string; label:string; styles: ReturnType<typeof createStyles> }) { return <View style={styles.legendItem}><View style={[styles.legendDot,{backgroundColor:color}]} /><Text style={styles.caption}>{label}</Text></View>; }
-function CurriculumSemester({ index, courses, theme, styles }: ScreenProps & { index:number; courses:CurriculumCourse[] }) { const done = courses.filter((c)=>c.status==="done").length; return <Surface styles={styles}><View style={styles.rowBetween}><Eyebrow styles={styles}>{index+1}º SEMESTRE</Eyebrow><Text style={styles.monoLink}>{done}/{courses.length}</Text></View><View style={styles.courseGrid}>{courses.map((course) => { const color = course.status === "done" ? theme.success : course.status === "current" ? theme.primary : theme.border; const details=[course.code,course.hours?`${course.hours}h`:null,course.type].filter(Boolean).join(" · "); return <View key={course.id} style={styles.curriculumItem}><View style={[styles.curriculumMark,{backgroundColor:color}]} /><View style={styles.flex}><Text style={[styles.curriculumText, course.status === "pending" && styles.faintText]} numberOfLines={2}>{formatAcademicName(course.name)}</Text><Text style={styles.faintCaption} numberOfLines={1}>{details}</Text></View></View>; })}</View></Surface>; }
+function CurriculumCourses({ courses, theme, styles }: ScreenProps & { courses:CurriculumCourse[] }) { const done = courses.filter((c)=>c.status==="done").length; return <Surface styles={styles}><View style={styles.rowBetween}><Eyebrow styles={styles}>DISCIPLINAS DA ESTRUTURA</Eyebrow><Text style={styles.monoLink}>{done}/{courses.length}</Text></View><View style={styles.courseGrid}>{courses.map((course) => { const color = course.status === "done" ? theme.success : course.status === "current" ? theme.primary : theme.border; const details=[course.code,course.hours?`${course.hours}h`:null,course.type].filter(Boolean).join(" · "); return <View key={course.id} style={styles.curriculumItem}><View style={[styles.curriculumMark,{backgroundColor:color}]} /><View style={styles.flex}><Text style={[styles.curriculumText, course.status === "pending" && styles.faintText]} numberOfLines={2}>{formatAcademicName(course.name)}</Text><Text style={styles.faintCaption} numberOfLines={1}>{details}</Text></View></View>; })}</View></Surface>; }
 function WorkloadLine({ label, done, total, styles }: { label:string;done:number;total:number;styles:ReturnType<typeof createStyles> }) { return <View style={styles.workloadRow}><Text style={styles.body}>{label}</Text><Text style={styles.monoValue}>{done.toLocaleString("pt-BR")}/{total.toLocaleString("pt-BR")}</Text></View>; }
 function EnrollmentRow({ item, index, styles }: { item:EnrollmentEntry;index:number;styles:ReturnType<typeof createStyles> }) { const danger=item.status==="Cancelada"; const details=[item.code,item.section,item.stage||null,item.requestedAt].filter(Boolean).join(" · "); return <View style={[styles.enrollmentRow,index>0&&styles.topBorder]}><View style={styles.flex}><Text style={styles.itemTitle}>{formatAcademicName(item.course)}</Text><Text style={styles.monoCaption}>{details}</Text></View><Text style={[styles.statusText,danger&&styles.dangerText]}>{item.status}</Text></View>; }
 function NotificationItem({ kind, title, color, styles }: {kind:string;title:string;color:string;styles:ReturnType<typeof createStyles>}) { return <Surface styles={styles}><Text style={[styles.eyebrow,{color}]}>{kind}</Text><Text style={styles.itemTitle}>{title}</Text></Surface>; }
@@ -1541,17 +1446,14 @@ function createStyles(theme: DesignTheme) {
   return StyleSheet.create({
     safeShell:{flex:1},shell:{flex:1,backgroundColor:theme.background},scroll:{flex:1},scrollContent:{paddingBottom:28},scrollContentWithTabs:{paddingBottom:96},page:{paddingHorizontal:16,paddingTop:16,gap:12},flex:{flex:1},pressed:{opacity:.68},pressableFlex:{flex:1},rowBetween:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",gap:12},topBorder:{borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:theme.border},
     hero:{backgroundColor:theme.dark?theme.background:"#174F3D",paddingHorizontal:20,paddingTop:18,paddingBottom:18,gap:3,borderBottomWidth:theme.dark?1:0,borderBottomColor:theme.border},brandLockup:{flexDirection:"row",alignItems:"center",gap:7},brandSymbol:{width:21,height:21},logoSmall:{fontFamily:fonts.monoMedium,fontSize:12,letterSpacing:1,paddingRight:6,flexShrink:0,color:theme.dark?theme.muted:"#FFFFFF",opacity:.9},heroPeriod:{fontFamily:fonts.mono,fontSize:11,color:theme.dark?theme.body:"#FFFFFF",backgroundColor:theme.dark?theme.surfaceMuted:"rgba(255,255,255,.14)",paddingHorizontal:8,paddingVertical:4,borderRadius:4},heroTitle:{fontFamily:fonts.sansSemibold,fontSize:22,color:theme.dark?theme.ink:"#FFFFFF",marginTop:9},heroSubtitle:{fontFamily:fonts.sans,fontSize:12,color:theme.dark?theme.muted:"#FFFFFF",opacity:.72},
-    denseHero:{backgroundColor:theme.dark?theme.background:"#174F3D",padding:20,gap:18,borderBottomWidth:theme.dark?1:0,borderBottomColor:theme.border},periodOnGreen:{fontFamily:fonts.monoSemibold,fontSize:12,color:theme.dark?theme.ink:"#FFFFFF"},monoOnGreen:{fontFamily:fonts.mono,fontSize:11,color:theme.dark?theme.muted:"#FFFFFF",opacity:.75},denseMetrics:{flexDirection:"row",justifyContent:"space-between"},heroMetricLabel:{fontFamily:fonts.sansSemibold,fontSize:9.5,letterSpacing:.7,paddingRight:6,flexShrink:0,color:theme.dark?theme.muted:"#FFFFFF",opacity:.65},heroMetricValue:{fontFamily:fonts.monoSemibold,fontSize:16,color:theme.dark?theme.primary:"#FFFFFF",marginTop:2},
-    agendaHeader:{paddingHorizontal:20,paddingTop:18,paddingBottom:10,flexDirection:"row",justifyContent:"space-between",alignItems:"center"},periodPill:{fontFamily:fonts.monoMedium,fontSize:11,color:"#FFFFFF",backgroundColor:theme.dark?"#315848":"#174F3D",paddingHorizontal:9,paddingVertical:5,borderRadius:4},
     surface:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:10,padding:14,gap:8},listSurface:{padding:0,overflow:"hidden"},metricGrid:{flexDirection:"row",gap:10},metricCard:{flex:1,minHeight:112,justifyContent:"space-between"},fourMetrics:{flexDirection:"row",gap:7},tinyMetric:{flex:1,backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:10,padding:10,gap:4},
-    eyebrow:{fontFamily:fonts.sansSemibold,fontSize:10.5,letterSpacing:.75,paddingRight:6,flexShrink:0,color:theme.muted},pageTitle:{fontFamily:fonts.sansSemibold,fontSize:26,lineHeight:31,color:theme.ink},cardTitle:{fontFamily:fonts.sansMedium,fontSize:14,lineHeight:19,color:theme.ink},itemTitle:{fontFamily:fonts.sansMedium,fontSize:14,lineHeight:19,color:theme.ink},body:{fontFamily:fonts.sans,fontSize:13,lineHeight:20,color:theme.body},bodyStrong:{fontFamily:fonts.sansSemibold,color:theme.ink},caption:{fontFamily:fonts.sans,fontSize:11.5,lineHeight:17,color:theme.muted},faintCaption:{fontFamily:fonts.sans,fontSize:10.5,lineHeight:15,color:theme.faint},footnote:{fontFamily:fonts.sans,fontSize:10.5,lineHeight:16,color:theme.faint,textAlign:"center",paddingHorizontal:10},monoCaption:{fontFamily:fonts.mono,fontSize:10.5,lineHeight:16,color:theme.muted},monoLarge:{fontFamily:fonts.monoSemibold,fontSize:17,color:theme.ink},monoMetric:{fontFamily:fonts.monoSemibold,fontSize:26,color:theme.ink},monoValue:{fontFamily:fonts.monoSemibold,fontSize:14,color:theme.ink},monoAssessment:{fontFamily:fonts.monoSemibold,fontSize:17,color:theme.ink},monoLink:{fontFamily:fonts.monoSemibold,fontSize:11.5,color:theme.primary},monoTime:{fontFamily:fonts.monoMedium,fontSize:12,color:theme.muted},primaryText:{color:theme.primary},dangerText:{color:theme.danger},successText:{color:theme.success},faintText:{color:theme.faint},emptyInline:{fontFamily:fonts.sans,fontSize:13,lineHeight:19,color:theme.muted,textAlign:"center",paddingVertical:18},
+    eyebrow:{fontFamily:fonts.sansSemibold,fontSize:10.5,letterSpacing:.75,paddingRight:6,flexShrink:0,color:theme.muted},pageTitle:{fontFamily:fonts.sansSemibold,fontSize:26,lineHeight:31,color:theme.ink},cardTitle:{fontFamily:fonts.sansMedium,fontSize:14,lineHeight:19,color:theme.ink},itemTitle:{fontFamily:fonts.sansMedium,fontSize:14,lineHeight:19,color:theme.ink},body:{fontFamily:fonts.sans,fontSize:13,lineHeight:20,color:theme.body},bodyStrong:{fontFamily:fonts.sansSemibold,color:theme.ink},caption:{fontFamily:fonts.sans,fontSize:11.5,lineHeight:17,color:theme.muted},faintCaption:{fontFamily:fonts.sans,fontSize:10.5,lineHeight:15,color:theme.faint},monoCaption:{fontFamily:fonts.mono,fontSize:10.5,lineHeight:16,color:theme.muted},monoLarge:{fontFamily:fonts.monoSemibold,fontSize:17,color:theme.ink},monoMetric:{fontFamily:fonts.monoSemibold,fontSize:26,color:theme.ink},monoValue:{fontFamily:fonts.monoSemibold,fontSize:14,color:theme.ink},monoAssessment:{fontFamily:fonts.monoSemibold,fontSize:17,color:theme.ink},monoLink:{fontFamily:fonts.monoSemibold,fontSize:11.5,color:theme.primary},monoTime:{fontFamily:fonts.monoMedium,fontSize:12,color:theme.muted},primaryText:{color:theme.primary},dangerText:{color:theme.danger},successText:{color:theme.success},faintText:{color:theme.faint},emptyInline:{fontFamily:fonts.sans,fontSize:13,lineHeight:19,color:theme.muted,textAlign:"center",paddingVertical:18},
     titleBlock:{gap:2},backHeader:{alignSelf:"flex-start",flexDirection:"row",alignItems:"center",gap:2,minHeight:34},backText:{fontFamily:fonts.sans,fontSize:12,color:theme.primary},
     riskItem:{gap:6,paddingVertical:4},progressTrack:{height:5,borderRadius:3,backgroundColor:theme.surfaceMuted,overflow:"hidden"},progressFill:{height:"100%",borderRadius:3},linkRow:{borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:theme.border,paddingTop:11,marginTop:3,flexDirection:"row",alignItems:"center",gap:8},linkText:{fontFamily:fonts.sansMedium,fontSize:12,color:theme.primary,flex:1},
-    denseCourse:{minHeight:62,paddingHorizontal:14,paddingVertical:11,flexDirection:"row",alignItems:"center",gap:12},inlineValues:{flexDirection:"row",alignItems:"center",gap:10},linkCard:{backgroundColor:theme.primarySoft,borderWidth:1,borderColor:theme.dark?theme.border:"#CFE0D7",borderRadius:10,padding:14,flexDirection:"row",justifyContent:"space-between",alignItems:"center"},gradeCourse:{minHeight:68,paddingHorizontal:14,paddingVertical:11,flexDirection:"row",alignItems:"center",gap:10},gradeSide:{alignItems:"flex-end",gap:2},assessmentRow:{minHeight:64,paddingHorizontal:14,paddingVertical:10,flexDirection:"row",alignItems:"center",gap:12},infoBox:{backgroundColor:theme.primarySoft,borderWidth:1,borderColor:theme.border,borderRadius:10,padding:14,gap:7},riskSurface:{borderColor:theme.danger,backgroundColor:theme.dangerSoft},simpleRow:{minHeight:50,paddingHorizontal:14,paddingVertical:10,flexDirection:"row",justifyContent:"space-between",alignItems:"center",gap:12},absenceDates:{borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:theme.border,paddingTop:8,gap:3},
+    linkCard:{backgroundColor:theme.primarySoft,borderWidth:1,borderColor:theme.dark?theme.border:"#CFE0D7",borderRadius:10,padding:14,flexDirection:"row",justifyContent:"space-between",alignItems:"center"},gradeCourse:{minHeight:68,paddingHorizontal:14,paddingVertical:11,flexDirection:"row",alignItems:"center",gap:10},gradeSide:{alignItems:"flex-end",gap:2},assessmentRow:{minHeight:64,paddingHorizontal:14,paddingVertical:10,flexDirection:"row",alignItems:"center",gap:12},infoBox:{backgroundColor:theme.primarySoft,borderWidth:1,borderColor:theme.border,borderRadius:10,padding:14,gap:7},
     dayTabs:{flexDirection:"row",backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:10,overflow:"hidden"},dayTab:{flex:1,alignItems:"center",paddingVertical:8,gap:2},dayTabActive:{backgroundColor:theme.primary},dayName:{fontFamily:fonts.sansSemibold,fontSize:9.5,color:theme.muted},dayNumber:{fontFamily:fonts.monoMedium,fontSize:11,color:theme.ink},dayNameActive:{color:"#FFFFFF"},scheduleRow:{minHeight:78,padding:14,flexDirection:"row",alignItems:"flex-start",gap:10},scheduleLine:{width:2,alignSelf:"stretch",backgroundColor:theme.primary,borderRadius:1},
-    timelineSurface:{paddingVertical:14},timelineRow:{flexDirection:"row",minHeight:86},timelineRail:{width:56,alignItems:"center",position:"relative"},timelineDot:{width:8,height:8,borderRadius:4,backgroundColor:theme.border,marginTop:8},timelineStem:{position:"absolute",width:1,backgroundColor:theme.border,top:31,bottom:-5},timelineCard:{flex:1,backgroundColor:theme.surfaceMuted,borderRadius:10,padding:14,marginBottom:10,gap:3},timelineActive:{backgroundColor:theme.dark?"#315848":"#174F3D"},timelineActiveText:{color:"#FFFFFF"},timelineActiveCaption:{color:"rgba(255,255,255,.72)"},
     studentCardSurface:{gap:13},homeCardSurface:{gap:14,padding:16},cardIdentity:{flexDirection:"row",alignItems:"center",gap:12},photo:{width:54,height:66,borderRadius:7,backgroundColor:theme.primary},photoLarge:{width:76,height:92,borderRadius:9,backgroundColor:theme.primary},photoFallback:{alignItems:"center",justifyContent:"center"},homeBalances:{flexDirection:"row",backgroundColor:theme.surfaceMuted,borderRadius:9,paddingVertical:12},homeBalanceItem:{flex:1,paddingHorizontal:13,gap:3},homeBalanceDivider:{width:StyleSheet.hairlineWidth,backgroundColor:theme.border},homeBalanceValue:{fontFamily:fonts.monoSemibold,fontSize:20,color:theme.ink},balanceEstimate:{fontFamily:fonts.sansMedium,fontSize:10.5,color:theme.primary},balanceTabs:{flexDirection:"row",gap:8},balanceTab:{flex:1,borderWidth:1,borderColor:theme.border,borderRadius:10,padding:12,gap:5,backgroundColor:theme.surface},balanceTabActive:{borderColor:theme.primary,backgroundColor:theme.primarySoft},spendingPanel:{gap:12},spendingGrid:{flexDirection:"row",gap:8},spendingMetric:{flex:1,backgroundColor:theme.surfaceMuted,borderRadius:8,padding:11,gap:4},barcodePanel:{height:104,backgroundColor:"#FFFFFF",borderRadius:8,paddingHorizontal:10,paddingVertical:8,alignItems:"center",justifyContent:"center",overflow:"hidden"},barcodePanelCompact:{height:70},barcodeImage:{width:"100%",height:88},barcodeImageCompact:{height:54},barcodePlaceholder:{width:"100%",height:88,backgroundColor:"#F2F2F2",borderRadius:4},transaction:{minHeight:62,padding:14,flexDirection:"row",alignItems:"center",gap:12},
-    profileHeader:{alignItems:"center",gap:4,paddingVertical:4},rgaCopy:{minHeight:38,flexDirection:"row",alignItems:"center",gap:6,paddingHorizontal:11,borderRadius:8,backgroundColor:theme.primarySoft,borderWidth:1,borderColor:theme.border},rgaCopyHint:{fontFamily:fonts.sansMedium,fontSize:10.5,color:theme.primary},infoRow:{paddingHorizontal:14,paddingVertical:11,gap:3},infoValue:{fontFamily:fonts.sansMedium,fontSize:13.5,color:theme.ink},preferenceLabel:{fontFamily:fonts.sansMedium,fontSize:12,color:theme.ink,marginBottom:6},segmented:{flexDirection:"row",backgroundColor:theme.surfaceMuted,borderRadius:8,padding:3},segment:{flex:1,minHeight:38,alignItems:"center",justifyContent:"center",borderRadius:6,paddingHorizontal:4},segmentActive:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border},segmentText:{fontFamily:fonts.sansMedium,fontSize:10.5,color:theme.muted,textAlign:"center"},segmentTextActive:{color:theme.primary},menuRow:{minHeight:52,paddingHorizontal:14,flexDirection:"row",alignItems:"center",gap:11},secondaryAction:{minHeight:48,borderWidth:1,borderColor:theme.border,borderRadius:9,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8,backgroundColor:theme.surface},dangerAction:{borderColor:theme.danger},secondaryActionText:{fontFamily:fonts.sansSemibold,fontSize:13,color:theme.primary},
+    profileHeader:{alignItems:"center",gap:4,paddingVertical:4},rgaCopy:{minHeight:38,flexDirection:"row",alignItems:"center",gap:6,paddingHorizontal:11,borderRadius:8,backgroundColor:theme.primarySoft,borderWidth:1,borderColor:theme.border},rgaCopyHint:{fontFamily:fonts.sansMedium,fontSize:10.5,color:theme.primary},infoRow:{paddingHorizontal:14,paddingVertical:11,gap:3},infoValue:{fontFamily:fonts.sansMedium,fontSize:13.5,color:theme.ink},segmented:{flexDirection:"row",backgroundColor:theme.surfaceMuted,borderRadius:8,padding:3},segment:{flex:1,minHeight:38,alignItems:"center",justifyContent:"center",borderRadius:6,paddingHorizontal:4},segmentActive:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border},segmentText:{fontFamily:fonts.sansMedium,fontSize:10.5,color:theme.muted,textAlign:"center"},segmentTextActive:{color:theme.primary},menuRow:{minHeight:52,paddingHorizontal:14,flexDirection:"row",alignItems:"center",gap:11},secondaryAction:{minHeight:48,borderWidth:1,borderColor:theme.border,borderRadius:9,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8,backgroundColor:theme.surface},dangerAction:{borderColor:theme.danger},secondaryActionText:{fontFamily:fonts.sansSemibold,fontSize:13,color:theme.primary},
     documentListContent:{paddingHorizontal:16,paddingTop:16},documentHeader:{gap:12,marginBottom:12},documentSectionTitle:{gap:2,marginTop:2},documentSemesterHeader:{gap:2,paddingTop:8,paddingBottom:8},documentPlanSurface:{padding:0,overflow:"hidden",marginBottom:8},documentActionRow:{minHeight:64,paddingHorizontal:14,paddingVertical:10,flexDirection:"row",alignItems:"center",gap:11},searchBox:{minHeight:48,borderWidth:1,borderColor:theme.border,borderRadius:9,backgroundColor:theme.surface,justifyContent:"center"},searchInput:{fontFamily:fonts.sans,fontSize:13,color:theme.ink,paddingHorizontal:14,paddingVertical:11},
     diagnosticRow:{minHeight:62,paddingHorizontal:14,paddingVertical:11,flexDirection:"row",alignItems:"center",gap:11},diagnosticDot:{width:9,height:9,borderRadius:5},
     primaryAction:{minHeight:48,borderRadius:8,backgroundColor:theme.dark?"#315848":"#174F3D",alignItems:"center",justifyContent:"center",paddingHorizontal:18},primaryActionText:{fontFamily:fonts.sansSemibold,fontSize:14,color:"#FFFFFF"},inlineNotice:{backgroundColor:theme.primarySoft,borderWidth:1,borderColor:theme.border,borderRadius:9,padding:12},inlineDanger:{backgroundColor:theme.dangerSoft,borderColor:theme.danger},loadingNotice:{minHeight:48,backgroundColor:theme.surfaceMuted,borderRadius:9,paddingHorizontal:12,flexDirection:"row",alignItems:"center",gap:9},loadingNoticeCompact:{margin:10},noticeTitle:{fontFamily:fonts.sansSemibold,fontSize:12,color:theme.ink},noticeCopy:{fontFamily:fonts.sans,fontSize:11.5,lineHeight:17,color:theme.body},offlineBanner:{margin:12,marginBottom:0,backgroundColor:theme.warningSoft,borderWidth:1,borderColor:theme.warning,borderRadius:9,padding:11,flexDirection:"row",alignItems:"center",gap:9},warningBanner:{backgroundColor:theme.warningSoft,borderWidth:1,borderColor:theme.warning,borderRadius:9,padding:12,flexDirection:"row",alignItems:"center",gap:10},successBox:{backgroundColor:theme.successSoft,borderWidth:1,borderColor:theme.success,borderRadius:10,padding:14,gap:4},
@@ -1581,14 +1483,11 @@ function mergeTransactions(current: CardTransaction[], next: CardTransaction[]):
   })].slice(0, 400);
 }
 function transactionKey(item: CardTransaction): string { return `${item.date}|${item.time}|${item.type}|${item.value}|${item.merchant}`; }
-function isCurrentEntry(entry:ScheduleEntry):boolean { return currentSchedule([entry])===entry; }
 function locationLine(entry:ScheduleEntry):string { return [entry.room,entry.building,entry.unit].filter(Boolean).join(" · ")||"Local não informado"; }
 function dayName(day:number):string { return ["DOM","SEG","TER","QUA","QUI","SEX","SÁB"][day]??"—"; }
 function weekDate(day:number):number { const now=new Date(); const delta=day-now.getDay(); const date=new Date(now); date.setDate(now.getDate()+delta); return date.getDate(); }
-function dateHeading(date:Date):string { return date.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"short"}).toUpperCase().replace(".",""); }
 function groupHistory(items:HistoryCourse[]):Array<[string,HistoryCourse[]]> { const map=new Map<string,HistoryCourse[]>(); for(const item of items)map.set(item.term,[...(map.get(item.term)??[]),item]); return [...map.entries()].sort((a,b)=>b[0].localeCompare(a[0])); }
 function earliestHistoryTerm(items:HistoryCourse[]):string|null { const terms=items.map(item=>item.term).filter(term=>/^(?:19|20)\d{2}\/[12]$/.test(term)).sort(); return terms[0]??null; }
-function chunk<T>(items:T[],size:number):T[][] { const result:T[][]=[]; for(let i=0;i<items.length;i+=size)result.push(items.slice(i,i+size)); return result; }
 function workloadLine(portal:PortalData):string { const w=portal.workload; return w?`${w.totalDone.toLocaleString("pt-BR")}h cumpridas · ${Math.max(0,w.totalRequired-w.totalDone).toLocaleString("pt-BR")}h restantes · extensão ${w.extensionDone}h de ${w.extensionTotal}h`:"Carga horária não disponível"; }
 function messageOf(cause:unknown):string { return cause instanceof Error&&cause.message?cause.message:"Não foi possível atualizar os dados da UFGD."; }
 function reportLoadTiming(stage:string,startedAt:number):void { console.info(`[SIGECAD tempo] ${stage}: ${Date.now()-startedAt}ms`); }

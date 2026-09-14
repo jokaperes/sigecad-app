@@ -71,7 +71,7 @@ export function photoStatusLabel(status: PhotoStatus): string {
     case "not-found": return "a página não informou uma foto";
     case "invalid-url": return "a URL retornada não passou na validação";
     case "http-error": return "o servidor da foto não respondeu";
-    case "too-large": return "imagem vazia ou acima do limite seguro";
+    case "too-large": return "imagem vazia ou acima do limite permitido";
     case "invalid-image": return "conteúdo sem assinatura JPEG/PNG";
     case "read-error": return "falha ao converter a imagem em memória";
     case "render-error": return "o aparelho não conseguiu renderizar a imagem";

@@ -34,8 +34,7 @@ export function NativeLoginScreen({ onDone: _onDone }: { onDone: () => void }) {
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
         <Brand />
-        <Text style={styles.title}>Entre pela página oficial da UFGD</Text>
-        <Text style={styles.subtitle}>Sua senha fica dentro do portal e nunca é lida pelo aplicativo.</Text>
+        <Text style={styles.title}>Entrar</Text>
         {error ? <Notice danger>{error}</Notice> : null}
       </View>
       <View style={styles.browser}>
@@ -62,7 +61,7 @@ export function NativeLoginScreen({ onDone: _onDone }: { onDone: () => void }) {
           renderLoading={() => (
             <View style={styles.loading}>
               <ActivityIndicator color={colors.primary} />
-              <Text style={styles.loadingText}>Abrindo login seguro…</Text>
+              <Text style={styles.loadingText}>Abrindo login…</Text>
             </View>
           )}
           onShouldStartLoadWithRequest={({ url }) => allowInsideApp(url)}
@@ -73,7 +72,6 @@ export function NativeLoginScreen({ onDone: _onDone }: { onDone: () => void }) {
           }}
         />
       </View>
-      <Text style={styles.footer}>Domínios permitidos: CAS, gov.br oficial, SIGECAD e cartão da UFGD</Text>
     </SafeAreaView>
   );
 }
@@ -82,7 +80,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background, padding: spacing.md, gap: spacing.md },
   header: { gap: spacing.sm },
   title: { color: colors.ink, fontSize: 22, fontWeight: "800", marginTop: spacing.sm },
-  subtitle: { color: colors.muted, fontSize: 14, lineHeight: 20 },
   browser: {
     flex: 1,
     overflow: "hidden",
@@ -93,5 +90,4 @@ const styles = StyleSheet.create({
   },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm },
   loadingText: { color: colors.muted, fontSize: 14 },
-  footer: { color: colors.muted, fontSize: 12, textAlign: "center" },
 });

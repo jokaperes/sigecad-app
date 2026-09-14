@@ -2,20 +2,21 @@
   "expo": {
     "name": "SIGECAD",
     "slug": "sigecad-notificador",
-    "version": "0.3.10",
+    "version": "0.3.11",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
     "scheme": "sigecad",
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "br.edu.ufgd.notificador",
+      "buildNumber": "14",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "UIBackgroundModes": ["remote-notification", "fetch"]
       }
     },
     "android": {
-      "versionCode": 13,
+      "versionCode": 14,
       "package": "br.edu.ufgd.notificador",
       "googleServicesFile": "./google-services.json",
       "allowBackup": false,

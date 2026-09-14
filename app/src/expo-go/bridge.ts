@@ -55,7 +55,7 @@ export function buildBridgeCommand(id: string, kind: BridgeKind, numericId?: num
 
 export function parseBridgeResponse(raw: string): BridgeResponse {
   if (typeof raw !== "string" || raw.length === 0 || raw.length > MAX_BRIDGE_MESSAGE_BYTES) {
-    throw new PortalBridgeError("Resposta do portal excedeu o limite seguro.", "protocol");
+    throw new PortalBridgeError("Resposta do portal excedeu o limite permitido.", "protocol");
   }
   let value: unknown;
   try {
@@ -249,7 +249,7 @@ export const BRIDGE_BOOTSTRAP = `
         headers: { Accept: "application/json" }
       });
       var responseUrl = new URL(response.url);
-      if (response.status === 401 || response.status === 403 || responseUrl.hostname === "login.app.ufgd.edu.br") {
+      if (response.status === 401 || responseUrl.hostname === "login.app.ufgd.edu.br") {
         send({ id: request.id, ok: false, status: response.status, error: "auth" });
         return;
       }
@@ -286,7 +286,7 @@ export const BRIDGE_BOOTSTRAP = `
 
   function sameOriginResponse(response) {
     var url = new URL(response.url);
-    if (response.status === 401 || response.status === 403 || url.hostname === "login.app.ufgd.edu.br") {
+    if (response.status === 401 || url.hostname === "login.app.ufgd.edu.br") {
       throw new Error("AUTH");
     }
     if (url.origin !== window.location.origin) throw new Error("ORIGIN");
@@ -530,7 +530,7 @@ export const CARD_BRIDGE_BOOTSTRAP = `
       headers: { Accept: json ? "application/json" : "text/html, */*" }
     });
     var responseUrl = new URL(response.url);
-    if (response.status === 401 || response.status === 403 || responseUrl.hostname === "login.app.ufgd.edu.br") {
+    if (response.status === 401 || responseUrl.hostname === "login.app.ufgd.edu.br") {
       throw new Error("AUTH");
     }
     if (responseUrl.origin !== ORIGIN) throw new Error("ORIGIN");

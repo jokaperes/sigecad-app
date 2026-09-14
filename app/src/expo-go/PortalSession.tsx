@@ -663,8 +663,8 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       const labels = {
         auth: "Sua sessão UFGD terminou.",
         unavailable: "Este documento não está disponível no portal agora.",
-        invalid: "O portal não retornou um PDF seguro para este documento.",
-        "too-large": "O documento ultrapassa o limite seguro de 8 MB.",
+        invalid: "O portal não retornou um PDF válido para este documento.",
+        "too-large": "O documento ultrapassa o limite de 8 MB.",
         network: "Não foi possível baixar o documento da UFGD.",
       } as const;
       item.reject(new PortalBridgeError(labels[message.error], message.error === "auth" ? "auth" : "invalid-response"));
@@ -701,7 +701,7 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
       void shareSignedAcademicDocument(item.kind, message.url)
         .then(() => item.resolve(null))
         .catch(() => item.reject(new PortalBridgeError(
-          "Não foi possível preparar o PDF oficial da UFGD.",
+          "Não foi possível preparar o PDF.",
           "invalid-response",
         )));
       return;
@@ -740,7 +740,7 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
         .catch(() => {
           if (__DEV__) console.info("[SIGECAD documento] falha-validacao");
           item.reject(new PortalBridgeError(
-            "Não foi possível preparar o PDF oficial da UFGD.",
+            "Não foi possível preparar o PDF.",
             "invalid-response",
           ));
         });
@@ -845,7 +845,7 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
           renderLoading={() => (
             <View style={styles.loading}>
               <ActivityIndicator color={colors.primary} />
-              <Text style={styles.connectingText}>Abrindo login seguro…</Text>
+              <Text style={styles.connectingText}>Abrindo login…</Text>
             </View>
           )}
           onShouldStartLoadWithRequest={onShouldStartLoad}
@@ -860,10 +860,7 @@ export function PortalSession({ children }: { children: React.ReactNode }) {
         {liveDocumentSurface ? (
           <View style={styles.connectingOverlay} pointerEvents="auto">
             <ActivityIndicator color={colors.primary} />
-            <Text style={styles.connectingTitle}>Preparando o PDF oficial…</Text>
-            <Text style={styles.connectingCopy}>
-              O arquivo fica só neste aparelho, só enquanto você compartilha ou salva.
-            </Text>
+            <Text style={styles.connectingTitle}>Preparando PDF…</Text>
           </View>
         ) : null}
         {phase === "expired" ? (
@@ -948,7 +945,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   connectingTitle: { color: "#17201C", fontFamily: fonts.sansSemibold, fontSize: 20, lineHeight: 26, textAlign: "center" },
-  connectingCopy: { color: "#3D4A43", fontFamily: fonts.sans, fontSize: 13, lineHeight: 20, textAlign: "center" },
   browserContainer: {
     flex: 1,
     marginHorizontal: spacing.md,

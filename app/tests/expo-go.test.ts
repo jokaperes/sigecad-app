@@ -230,6 +230,9 @@ await check("ponte acadêmica mantém allowlist GET e nunca aceita caminho do ch
   assert(!BRIDGE_BOOTSTRAP.includes("document.cookie"));
   assert(!BRIDGE_BOOTSTRAP.includes("request.path"));
   assert(!BRIDGE_BOOTSTRAP.includes("request.url"));
+  assert(!BRIDGE_BOOTSTRAP.includes("response.status === 403"));
+  assert(BRIDGE_BOOTSTRAP.includes("response.status === 401"));
+  assert(!CARD_BRIDGE_BOOTSTRAP.includes("response.status === 403"));
   assert(BRIDGE_BOOTSTRAP.includes('searchParams.get("documento")'));
   for (const discarded of ["endereco", "telefone", "nome_mae", "justificativa_aluno"]) {
     assert(!BRIDGE_BOOTSTRAP.includes(`"${discarded}"`), `campo pessoal atravessa a ponte: ${discarded}`);
@@ -369,7 +372,7 @@ await check("Webdoc assinado é interceptado sem navegar nem expor parâmetros",
   assert(source.includes("const browserSource = useMemo(() => ({ uri: browserUri }), [browserUri]);"));
   assert(source.includes("source={browserSource}"));
   assert(source.includes("documentBrowserAndroid"));
-  assert(source.includes("Preparando o PDF oficial"));
+  assert(source.includes("Preparando PDF"));
   assert(source.includes("onFileDownload={(event) => { consumeSignedDocumentUrl(event.nativeEvent.downloadUrl); }}"));
   assert(!source.includes("console.log(url)") && !source.includes("console.info(url)"));
 });
@@ -465,9 +468,30 @@ await check("nomes em caixa alta são normalizados só para exibição", () => {
 
 await check("próxima aula mostra sala e intervalo completo", () => {
   const source = readFileSync(designSourcePath, "utf8");
-  assert(source.includes("formatScheduleRoom(next?.room)"));
-  assert(source.includes("formatScheduleSlot(next?.slot)"));
+  assert(source.includes("formatScheduleRoom(featured?.room)"));
+  assert(source.includes("formatScheduleSlot(featured?.slot)"));
   assert(!source.includes("next?.slot.split(/[–-]/)[0]?.trim()"));
+});
+
+await check("interface usa cards e barras e mantém apenas o tema configurável", () => {
+  const source = readFileSync(designSourcePath, "utf8");
+  assert(source.includes("<HomeCards"));
+  assert(source.includes("<RiskBar"));
+  assert(source.includes("<ThemeSelector"));
+  for (const removed of [
+    "PERSONALIZAÇÃO", "HomeDense", "HomeAgenda", "PreferenceGroup",
+    "DesignPreferences", "PDFs oficiais do portal", 'chunk(portal.curriculum, 6)',
+  ]) assert(!source.includes(removed), `interface ainda contém: ${removed}`);
+});
+
+await check("interface não exibe textos promocionais removidos", () => {
+  const design = readFileSync(designSourcePath, "utf8");
+  const session = readFileSync(portalSessionSourcePath, "utf8");
+  for (const removed of [
+    "Diagnóstico seguro", "Contagens e estados, sem valores pessoais",
+    "Dados locais protegidos", "Abrindo login seguro", "Preparando o PDF oficial",
+    "O arquivo fica só neste aparelho", "PDFs oficiais do portal",
+  ]) assert(!design.includes(removed) && !session.includes(removed), `texto ainda contém: ${removed}`);
 });
 
 await check("próxima aula respeita fim real e virada da semana", () => {

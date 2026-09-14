@@ -4,21 +4,10 @@ import type { CycleStorage, TurmaState } from "../sentinel/cycle";
 
 const REGISTRATION_KEY = "app:registration:v1";
 const PREVIEW_STATE_KEY = "app:expo-go-preview:v1";
-const LEGACY_DESIGN_PREFERENCES_KEY = "app:design-preferences:v2";
-// v3 preserves theme/Home from v2 and selects Bars as the requested default once.
-const DESIGN_PREFERENCES_KEY = "app:design-preferences:v3";
+const THEME_PREFERENCE_KEY = "app:theme-preference:v1";
+const LEGACY_THEME_PREFERENCE_KEYS = ["app:design-preferences:v3", "app:design-preferences:v2"];
 
-export interface DesignPreferences {
-  theme: "system" | "light" | "dark";
-  home: "cards" | "dense" | "agenda";
-  absences: "bars" | "alerts";
-}
-
-export const DEFAULT_DESIGN_PREFERENCES: DesignPreferences = {
-  theme: "system",
-  home: "cards",
-  absences: "bars",
-};
+export type ThemePreference = "system" | "light" | "dark";
 
 export interface Registration {
   turmas: string[];
@@ -94,6 +83,24 @@ export async function clearPreviewState(): Promise<void> {
   await AsyncStorage.removeItem(PREVIEW_STATE_KEY);
 }
 
+export async function getThemePreference(): Promise<ThemePreference> {
+  const current = await AsyncStorage.getItem(THEME_PREFERENCE_KEY);
+  if (current === "system" || current === "light" || current === "dark") return current;
+  for (const key of LEGACY_THEME_PREFERENCE_KEYS) {
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) continue;
+    try {
+      const value = JSON.parse(raw) as { theme?: unknown };
+      if (value.theme === "light" || value.theme === "dark") return value.theme;
+    } catch { /* Ignore invalid preferences from older versions. */ }
+  }
+  return "system";
+}
+
+export async function saveThemePreference(value: ThemePreference): Promise<void> {
+  await AsyncStorage.setItem(THEME_PREFERENCE_KEY, value);
+}
+
 export async function wipeAcademicPersistence(): Promise<void> {
   const keys = await AsyncStorage.getAllKeys();
   const owned = keys.filter((key) =>
@@ -102,29 +109,6 @@ export async function wipeAcademicPersistence(): Promise<void> {
     key.startsWith("turma:")
   );
   if (owned.length) await AsyncStorage.multiRemove(owned);
-}
-
-export async function getDesignPreferences(): Promise<DesignPreferences> {
-  const current = await AsyncStorage.getItem(DESIGN_PREFERENCES_KEY);
-  const legacy = current ? null : await AsyncStorage.getItem(LEGACY_DESIGN_PREFERENCES_KEY);
-  const raw = current ?? legacy;
-  if (!raw) return DEFAULT_DESIGN_PREFERENCES;
-  try {
-    const value = JSON.parse(raw) as Partial<DesignPreferences>;
-    const preferences: DesignPreferences = {
-      theme: value.theme === "light" || value.theme === "dark" ? value.theme : "system",
-      home: value.home === "dense" || value.home === "agenda" ? value.home : "cards",
-      absences: legacy ? "bars" : value.absences === "alerts" ? "alerts" : "bars",
-    };
-    if (legacy) await saveDesignPreferences(preferences);
-    return preferences;
-  } catch {
-    return DEFAULT_DESIGN_PREFERENCES;
-  }
-}
-
-export async function saveDesignPreferences(value: DesignPreferences): Promise<void> {
-  await AsyncStorage.setItem(DESIGN_PREFERENCES_KEY, JSON.stringify(value));
 }
 
 /** Removes registration metadata and hash-only snapshots from this device. */
@@ -145,5 +129,3 @@ function isItems(value: unknown): value is Items {
       (candidate.publicar === 0 || candidate.publicar === 1 || candidate.publicar === null);
   });
 }
-
-
