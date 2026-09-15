@@ -20,7 +20,7 @@ export type PhotoStatus =
   | "render-error"
   | "not-requested";
 
-export type PhotoVariant = "original" | "2048" | "1024" | "portal";
+export type PhotoVariant = "original" | "2048" | "1024" | "512" | "portal";
 
 export interface StudentCard {
   name: string | null;
@@ -74,6 +74,11 @@ export function mergeStudentCardSummary(
     version: summary.version ?? current.version,
     ruBalance: summary.ruBalance ?? current.ruBalance,
     canteenBalance: summary.canteenBalance ?? current.canteenBalance,
+    photoDataUrl: summary.photoDataUrl ?? current.photoDataUrl,
+    photoStatus: summary.photoDataUrl ? summary.photoStatus : current.photoStatus,
+    photoWidth: summary.photoDataUrl ? summary.photoWidth : current.photoWidth,
+    photoHeight: summary.photoDataUrl ? summary.photoHeight : current.photoHeight,
+    photoVariant: summary.photoDataUrl ? summary.photoVariant : current.photoVariant,
   };
 }
 
@@ -119,7 +124,7 @@ function optionalPhotoDimension(value: unknown): number | null {
 
 function optionalPhotoVariant(value: unknown): PhotoVariant | null {
   if (value === null || value === undefined || value === "") return null;
-  const allowed: PhotoVariant[] = ["original", "2048", "1024", "portal"];
+  const allowed: PhotoVariant[] = ["original", "2048", "1024", "512", "portal"];
   if (typeof value !== "string" || !allowed.includes(value as PhotoVariant)) {
     throw new DataValidationError("Origem da foto inválida.");
   }

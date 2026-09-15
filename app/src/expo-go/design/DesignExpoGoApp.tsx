@@ -273,7 +273,6 @@ function DesignDashboard() {
     const generation = ++refreshGeneration.current;
     const startedAt = Date.now();
     const hadCardDetails = Boolean(studentCardRef.current && (
-      studentCardRef.current.photoDataUrl ||
       studentCardRef.current.ruTransactions.length ||
       studentCardRef.current.canteenTransactions.length
     ));
@@ -282,34 +281,44 @@ function DesignDashboard() {
     setSecondaryPhase("loading");
     setError(null);
     try {
-      // Identity, classes, schedule and enrollment windows share the first
-      // academic batch. Notes stay off Home's critical path.
-      const startup = await loadAcademicStartupFast(request, requestBatch);
+      // Queue the card first. Its photo and balances are fetched together,
+      // while the academic startup follows in the same private WebView.
+      const cardResultPromise = Promise.resolve(loadStudentCardSummary(request))
+        .then((value) => {
+          reportLoadTiming("card-home", startedAt);
+          return { status: "fulfilled", value } as const;
+        })
+        .catch((reason: unknown) => {
+          reportLoadTiming("card-home-failed", startedAt);
+          return { status: "rejected", reason } as const;
+        });
+      const startupPromise = loadAcademicStartupFast(request, requestBatch)
+        .then((value) => {
+          reportLoadTiming("academic-data", startedAt);
+          return value;
+        });
+      const [startup, cardResult] = await Promise.all([
+        startupPromise,
+        cardResultPromise,
+      ]);
       const next = startup.overview;
       const currentPortal = portalDataFromStartup(startup.portal);
       if (generation !== refreshGeneration.current) return;
+      setCardLoading(false);
+      if (cardResult.status === "fulfilled") {
+        setStudentCard((current) => mergeStudentCardSummary(current, cardResult.value));
+        setCardError(cardResult.value.ruBalance && cardResult.value.canteenBalance
+          ? null
+          : "Um ou mais saldos do cartão estão indisponíveis no momento.");
+      } else {
+        setCardError("O portal Cartão está indisponível no momento.");
+      }
       setOverview(next);
       setPortal(currentPortal);
       setInitialComplete(true);
       setRefreshing(false);
-      reportLoadTiming("academic-data", startedAt);
       reportLoadTiming("home-painted", startedAt);
       const background = (async () => {
-        const cardResult = await Promise.resolve(loadStudentCardSummary(request))
-          .then((value) => ({ status: "fulfilled", value }) as const)
-          .catch((reason: unknown) => ({ status: "rejected", reason }) as const);
-        if (generation !== refreshGeneration.current) return;
-        setCardLoading(false);
-        if (cardResult.status === "fulfilled") {
-          setStudentCard((current) => mergeStudentCardSummary(current, cardResult.value));
-          setCardError(cardResult.value.ruBalance || cardResult.value.canteenBalance
-            ? null
-            : "Os saldos do cartão estão indisponíveis no momento.");
-          reportLoadTiming("card-summary", startedAt);
-        } else {
-          setCardError("O portal Cartão está indisponível no momento.");
-          reportLoadTiming("card-summary-failed", startedAt);
-        }
         try {
           const academicRequest = createBatchedPortalRequest(requestBatch);
           const [notes, complete] = await Promise.all([
@@ -474,7 +483,7 @@ function DesignDashboard() {
           <OfflineBanner theme={theme} styles={styles} onRetry={() => void refresh(true)} />
         ) : null}
         {route === "home" && overview ? (
-          <HomeCards overview={overview} card={studentCard} cardLoading={cardLoading} profile={profile} portal={portal} theme={theme} styles={styles} navigate={navigate} />
+          <HomeCards overview={overview} card={studentCard} cardLoading={cardLoading} cardError={cardError} profile={profile} portal={portal} theme={theme} styles={styles} navigate={navigate} />
         ) : null}
         {route === "grades" && overview ? (
           <GradesScreen overview={overview} loading={secondaryPhase === "loading"} theme={theme} styles={styles} openCourse={openCourse} openAbsences={() => navigate("absences")} />
@@ -521,8 +530,8 @@ function DesignDashboard() {
 
 interface ScreenProps { theme: DesignTheme; styles: ReturnType<typeof createStyles> }
 
-function HomeCards({ overview, card, cardLoading, profile, portal, theme, styles, navigate }: ScreenProps & {
-  overview: AcademicOverview; card: StudentCard | null; cardLoading: boolean; profile: AcademicProfile | null; portal: PortalData; navigate(route: Route): void;
+function HomeCards({ overview, card, cardLoading, cardError, profile, portal, theme, styles, navigate }: ScreenProps & {
+  overview: AcademicOverview; card: StudentCard | null; cardLoading: boolean; cardError: string | null; profile: AcademicProfile | null; portal: PortalData; navigate(route: Route): void;
 }) {
   const activeCourses = useMemo(() => overview.courses.filter((course) => !isFinishedCourse(course)), [overview.courses]);
   const schedule = useMemo(() => activeScheduleEntries(portal.schedule, overview.courses), [portal.schedule, overview.courses]);
@@ -548,7 +557,7 @@ function HomeCards({ overview, card, cardLoading, profile, portal, theme, styles
             <Clock3 size={22} color={theme.primary} strokeWidth={1.8} />
           </View>
         </Surface>
-        <HomeAcademicCard card={card} loading={cardLoading} profile={profile} onPress={() => navigate("card")} theme={theme} styles={styles} />
+        <HomeAcademicCard card={card} loading={cardLoading} error={cardError} profile={profile} onPress={() => navigate("card")} theme={theme} styles={styles} />
         <Surface styles={styles}>
           <Eyebrow styles={styles}>{risks.length ? "ATENÇÃO A FALTAS" : "FALTAS E FREQUÊNCIA"}</Eyebrow>
           {risks.map((item) => <RiskBar key={courseKey(item)} course={item} theme={theme} styles={styles} />)}
@@ -1265,8 +1274,8 @@ function StudentPhoto({ card, large, styles, onRenderError }: { card: StudentCar
   return <View style={[style, styles.photoFallback]}><User size={large ? 32 : 23} color="#FFFFFF" /></View>;
 }
 
-function HomeAcademicCard({ card, loading, profile, onPress, theme, styles }: ScreenProps & {
-  card: StudentCard | null; loading: boolean; profile: AcademicProfile | null; onPress(): void;
+function HomeAcademicCard({ card, loading, error, profile, onPress, theme, styles }: ScreenProps & {
+  card: StudentCard | null; loading: boolean; error: string | null; profile: AcademicProfile | null; onPress(): void;
 }) {
   const ru = buildSpendingInsight(card?.ruBalance, card?.ruTransactions ?? [], "ru");
   const canteen = buildSpendingInsight(card?.canteenBalance, card?.canteenTransactions ?? [], "canteen");
@@ -1289,6 +1298,7 @@ function HomeAcademicCard({ card, loading, profile, onPress, theme, styles }: Sc
           <View style={styles.homeBalanceDivider} />
           <HomeBalance label="CANTINA" balance={card?.canteenBalance} insight={canteen} loading={loading} styles={styles} />
         </View>
+        {error ? <Text style={styles.caption}>{error}</Text> : null}
         <BarcodeStrip value={card?.barcodeValue} compact styles={styles} />
       </Surface>
     </Pressable>

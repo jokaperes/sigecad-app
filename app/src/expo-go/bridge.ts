@@ -458,9 +458,9 @@ export const CARD_BRIDGE_BOOTSTRAP = `
   var CHANNEL = ${JSON.stringify(BRIDGE_CHANNEL)};
   var PERF_CHANNEL = ${JSON.stringify(BRIDGE_PERF_CHANNEL)};
   var MAX_TEXT = 1200000;
-  // Keeps the base64 response below the 1.5 MB native bridge envelope while
-  // allowing a materially sharper source than the former 650 KB ceiling.
-  var MAX_PHOTO_BYTES = 900000;
+  // Base64 expands binary data by a third. Keep the image below the card
+  // parser's 900 KB data-URL limit instead of rejecting the entire card.
+  var MAX_PHOTO_BYTES = 640000;
   var ORIGIN = "https://cartao.app.ufgd.edu.br";
   // Used exactly once to avoid repeating the discovery/status/balance GETs
   // between the priority summary and the immediately following full card load.
@@ -642,24 +642,23 @@ export const CARD_BRIDGE_BOOTSTRAP = `
     if (!match) return { dataUrl: null, status: "invalid-url" };
     var base = "/foto/" + match[1];
     var requested = [
-      { path: base, variant: "original" },
-      { path: base + "/2048/2048", variant: "2048" },
-      { path: base + "/1024/1024", variant: "1024" }
+      { path: base + "/1024/1024", variant: "1024" },
+      { path: base + "/512/512", variant: "512" },
+      { path: url.pathname, variant: "portal" },
+      { path: base, variant: "original" }
     ];
-    if (!requested.some(function (item) { return item.path === url.pathname; })) {
-      requested.push({ path: url.pathname, variant: "portal" });
-    }
     var lastStatus = "http-error";
-    var results = await Promise.all(requested.map(function (item) { return photoCandidate(item.path, item.variant); }));
-    var valid = results.map(function (item) {
-      if (item.status !== "ok") lastStatus = item.status;
-      return item.candidate;
-    }).filter(Boolean);
-    if (!valid.length) return { dataUrl: null, status: lastStatus, width: null, height: null, variant: null };
-    valid.sort(function (a, b) {
-      return (b.width * b.height) - (a.width * a.height) || b.bytes.length - a.bytes.length;
-    });
-    var best = valid[0];
+    var best = null;
+    var seen = {};
+    for (var index = 0; index < requested.length; index += 1) {
+      var item = requested[index];
+      if (seen[item.path]) continue;
+      seen[item.path] = true;
+      var result = await photoCandidate(item.path, item.variant);
+      if (result.candidate) { best = result.candidate; break; }
+      lastStatus = result.status;
+    }
+    if (!best) return { dataUrl: null, status: lastStatus, width: null, height: null, variant: null };
     var blob = new Blob([best.bytes], { type: best.jpeg ? "image/jpeg" : "image/png" });
     return await new Promise(function (resolve) {
       var reader = new FileReader();
@@ -685,13 +684,20 @@ export const CARD_BRIDGE_BOOTSTRAP = `
       };
     });
   }
-  async function loadCardContext() {
+  async function loadCardContext(includePhoto) {
     var locationUrl = new URL(window.location.href);
     if (locationUrl.origin !== ORIGIN || !/^\\/cartoes_usuario\\/visualiza_pessoa\\/?$/.test(locationUrl.pathname)) {
       throw new Error("ORIGIN");
     }
     // ensureOrigin already loaded this authenticated page; do not GET it twice.
     var person = document;
+    // Photo and card-status requests are independent. Start the image while
+    // the page is still yielding its authenticated card link and balances.
+    var photoPromise = includePhoto
+      ? photoData(person).catch(function () {
+          return { dataUrl: null, status: "read-error", width: null, height: null, variant: null };
+        })
+      : Promise.resolve({ dataUrl: null, status: "not-requested", width: null, height: null, variant: null });
     perf("cartao-pessoa");
     // The origin handshake deliberately runs before page assets finish. Wait
     // only for the card anchor so we do not race the still-parsing HTML.
@@ -731,7 +737,8 @@ export const CARD_BRIDGE_BOOTSTRAP = `
       number: cardLegend.match(/\\d{6,}/),
       version: cardLegend.match(/\\(Via\\s+\\d+\\)/i),
       ruBalance: ruBalance,
-      canteenBalance: canteenBalance
+      canteenBalance: canteenBalance,
+      photoPromise: photoPromise
     };
   }
   window.__SIGECAD_REQUEST__ = async function (request) {
@@ -745,7 +752,7 @@ export const CARD_BRIDGE_BOOTSTRAP = `
       var page = request.numericId == null ? 1 : request.numericId;
       if (!Number.isSafeInteger(page) || page < 1 || page > 50) throw new Error("CARD");
       var reusedSummary = request.kind === "card" && page === 1 && summaryContext;
-      var context = reusedSummary ? summaryContext : await loadCardContext();
+      var context = reusedSummary ? summaryContext : await loadCardContext(page === 1);
       if (reusedSummary) {
         if (summaryContextTimer) clearTimeout(summaryContextTimer);
         summaryContextTimer = null;
@@ -758,6 +765,7 @@ export const CARD_BRIDGE_BOOTSTRAP = `
       var number = context.number;
       var version = context.version;
       if (request.kind === "card-summary") {
+        var summaryPhoto = await context.photoPromise;
         summaryContext = context;
         if (summaryContextTimer) clearTimeout(summaryContextTimer);
         summaryContextTimer = setTimeout(function () {
@@ -778,11 +786,11 @@ export const CARD_BRIDGE_BOOTSTRAP = `
             version: version ? version[0].replace(/[()]/g, "") : null,
             ruBalance: context.ruBalance,
             canteenBalance: context.canteenBalance,
-            photoDataUrl: null,
-            photoStatus: "not-requested",
-            photoWidth: null,
-            photoHeight: null,
-            photoVariant: null,
+            photoDataUrl: summaryPhoto.dataUrl,
+            photoStatus: summaryPhoto.status,
+            photoWidth: summaryPhoto.width || null,
+            photoHeight: summaryPhoto.height || null,
+            photoVariant: summaryPhoto.variant || null,
             page: 1,
             ruTransactions: [],
             canteenTransactions: []
@@ -794,7 +802,7 @@ export const CARD_BRIDGE_BOOTSTRAP = `
       var extracts = await Promise.all([
         optionalChecked("/cartoes_usuario/listagem_extrato_ajax_ru" + params, true, { Extrato: [] }),
         optionalChecked("/cartoes_usuario/listagem_extrato_ajax_cantina" + params, true, { Extrato: [] }),
-        page === 1 ? photoData(person) : Promise.resolve({ dataUrl: null, status: "not-requested" })
+        page === 1 ? context.photoPromise : Promise.resolve({ dataUrl: null, status: "not-requested" })
       ]);
       send({
         id: request.id,

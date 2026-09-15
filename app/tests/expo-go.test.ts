@@ -2,6 +2,7 @@ import { loadAcademicOverview } from "../src/core/academic";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runInNewContext } from "node:vm";
 import {
   BRIDGE_CHANNEL,
   BRIDGE_BOOTSTRAP,
@@ -377,13 +378,15 @@ await check("Webdoc assinado é interceptado sem navegar nem expor parâmetros",
   assert(!source.includes("console.log(url)") && !source.includes("console.info(url)"));
 });
 
-await check("Home pinta antes de cartão, foto, extrato e dados secundários", () => {
+await check("Home espera foto e saldos, mas não espera extrato nem dados secundários", () => {
   const source = readFileSync(designSourcePath, "utf8");
   const painted = source.indexOf('reportLoadTiming("home-painted"');
   const cardSummary = source.indexOf('loadStudentCardSummary(request)');
   const fullCard = source.indexOf('loadStudentCard(request)');
   const secondary = source.indexOf('hydrateAcademicNotes(academicRequest, startup)');
-  assert(painted > 0 && painted < cardSummary && cardSummary < secondary && secondary < fullCard);
+  assert(cardSummary > 0 && cardSummary < painted && painted < secondary && secondary < fullCard);
+  assert(source.includes("const [startup, cardResult] = await Promise.all"));
+  assert(source.includes('reportLoadTiming("card-home"'));
   assert(!source.includes("25 * (index % 4)"), "atraso artificial de notas voltou");
   assert(source.includes("<SectionList"));
   assert(source.includes('route === "documents"'));
@@ -432,10 +435,14 @@ await check("ponte de cartão deriva recursos da página e nunca lê cookie", ()
   assert(CARD_BRIDGE_BOOTSTRAP.includes('response.body.getReader()'));
   assert(CARD_BRIDGE_BOOTSTRAP.includes('total > MAX_PHOTO_BYTES'));
   assert(CARD_BRIDGE_BOOTSTRAP.includes('"/foto/" + match[1]'));
-  assert(CARD_BRIDGE_BOOTSTRAP.includes('"/2048/2048"'));
   assert(CARD_BRIDGE_BOOTSTRAP.includes('"/1024/1024"'));
+  assert(CARD_BRIDGE_BOOTSTRAP.includes('"/512/512"'));
   assert(CARD_BRIDGE_BOOTSTRAP.includes("imageDimensions"));
-  assert(CARD_BRIDGE_BOOTSTRAP.includes("b.width * b.height"));
+  assert(CARD_BRIDGE_BOOTSTRAP.includes("var MAX_PHOTO_BYTES = 640000"));
+  assert(CARD_BRIDGE_BOOTSTRAP.includes("if (result.candidate) { best = result.candidate; break; }"));
+  assert(CARD_BRIDGE_BOOTSTRAP.includes("? photoData(person).catch"));
+  assert(CARD_BRIDGE_BOOTSTRAP.includes("loadCardContext(page === 1)"));
+  assert(CARD_BRIDGE_BOOTSTRAP.includes("var summaryPhoto = await context.photoPromise"));
   assert(CARD_BRIDGE_BOOTSTRAP.includes("optionalChecked(ruPath"));
   assert(CARD_BRIDGE_BOOTSTRAP.includes("optionalChecked(canteenPath"));
   assert(CARD_BRIDGE_BOOTSTRAP.includes("message === \"AUTH\" || message === \"ORIGIN\""));
@@ -450,6 +457,82 @@ await check("ponte de cartão deriva recursos da página e nunca lê cookie", ()
   assert(!CARD_BRIDGE_BOOTSTRAP.includes("document.cookie"));
   assert(!CARD_BRIDGE_BOOTSTRAP.includes("request.statusId"));
   assert(!CARD_BRIDGE_BOOTSTRAP.includes("request.resourceHash"));
+});
+
+await check("cartão inicial traz foto e saldos sem baixar extrato nem imagem gigante", async () => {
+  const photoHash = "a".repeat(32);
+  const cardLink = `/cartoes_usuario/visualiza_estatus/123/${"b".repeat(32)}`;
+  const visited: string[] = [];
+  const messages: Array<{ id?: string; ok?: boolean; data?: unknown }> = [];
+  const person = {
+    querySelectorAll(selector: string) {
+      if (selector === "a[href]") return [{ getAttribute: () => cardLink }];
+      if (selector.includes("img[src]")) return [{ getAttribute: () => `/foto/${photoHash}` }];
+      return [];
+    },
+  };
+  const status = {
+    documentElement: { textContent: "" },
+    querySelectorAll(selector: string) {
+      if (selector === "a, li, span") return [
+        { textContent: "Extrato RU R$ 12,34" },
+        { textContent: "Extrato Cantina R$ 5,80" },
+      ];
+      if (selector === "legend") return [{ textContent: "Cartão: 202200012345 (Via 1)" }];
+      return [];
+    },
+  };
+  const png = new Uint8Array(24);
+  png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  png.set([0, 0, 2, 0, 0, 0, 2, 0], 16);
+  const context = {
+    window: {
+      location: { href: "https://cartao.app.ufgd.edu.br/cartoes_usuario/visualiza_pessoa" },
+      ReactNativeWebView: { postMessage: (raw: string) => messages.push(JSON.parse(raw)) },
+    },
+    document: person,
+    DOMParser: class { parseFromString() { return status; } },
+    FileReader: class {
+      result = "data:image/png;base64,iVBORw0KGgo=";
+      onload: (() => void) | null = null;
+      readAsDataURL() { this.onload?.(); }
+    },
+    Blob,
+    URL,
+    Uint8Array,
+    setTimeout: (callback: () => void) => { queueMicrotask(callback); return 1; },
+    clearTimeout: () => undefined,
+    fetch: async (path: string) => {
+      visited.push(path);
+      if (path === cardLink) return {
+        ok: true, status: 200, url: `https://cartao.app.ufgd.edu.br${path}`,
+        text: async () => "STATUS",
+      };
+      if (path === `/foto/${photoHash}/1024/1024`) return {
+        ok: true, status: 200, url: `https://cartao.app.ufgd.edu.br${path}`,
+        headers: { get: () => "700000" },
+      };
+      if (path === `/foto/${photoHash}/512/512`) return {
+        ok: true, status: 200, url: `https://cartao.app.ufgd.edu.br${path}`,
+        headers: { get: () => String(png.byteLength) },
+        arrayBuffer: async () => png.buffer,
+      };
+      throw new Error(`Rota inesperada: ${path}`);
+    },
+  };
+  runInNewContext(CARD_BRIDGE_BOOTSTRAP, context);
+  const request = (context.window as typeof context.window & {
+    __SIGECAD_REQUEST__?: (item: { id: string; kind: string; numericId: number | null }) => Promise<void>;
+  }).__SIGECAD_REQUEST__;
+  assert(request);
+  await request({ id: "req-1", kind: "card-summary", numericId: null });
+  const response = messages.find((item) => item.id === "req-1");
+  assert(response?.ok && response.data);
+  const card = parseStudentCard(response.data);
+  assert(card.photoVariant === "512" && card.photoDataUrl !== null);
+  assert(card.ruBalance === "R$ 12,34" && card.canteenBalance === "R$ 5,80");
+  assert(visited.includes(`/foto/${photoHash}/512/512`));
+  assert(!visited.some((path) => path.includes("ajax") || path === `/foto/${photoHash}`));
 });
 
 await check("nomes em caixa alta são normalizados só para exibição", () => {
@@ -779,14 +862,20 @@ await check("paginação do cartão só aceita páginas limitadas", async () => 
   assert(rejected, "página acima do limite foi aceita");
 });
 
-await check("resumo prioritário do cartão não espera foto nem extrato", async () => {
+await check("resumo prioritário do cartão inclui foto e saldos sem esperar extrato", async () => {
   let requested = "";
   const card = await loadStudentCardSummary(async (kind) => {
     requested = kind;
-    return { ruBalance: "R$ 12,34", photoStatus: "not-requested", ruTransactions: [], canteenTransactions: [] };
+    return {
+      ruBalance: "R$ 12,34", canteenBalance: "R$ 5,80",
+      photoDataUrl: "data:image/png;base64,iVBORw0KGgo=", photoStatus: "ok",
+      photoWidth: 512, photoHeight: 512, photoVariant: "512",
+      ruTransactions: [], canteenTransactions: [],
+    };
   });
   assert(requested === "card-summary");
-  assert(card.ruBalance === "R$ 12,34" && card.photoDataUrl === null && card.ruTransactions.length === 0);
+  assert(card.ruBalance === "R$ 12,34" && card.canteenBalance === "R$ 5,80");
+  assert(card.photoDataUrl !== null && card.photoVariant === "512" && card.ruTransactions.length === 0);
 });
 
 await check("resumo do cartão preserva mídia e extrato já hidratados", () => {
